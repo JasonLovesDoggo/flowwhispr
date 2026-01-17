@@ -10,6 +10,27 @@ Flow is a voice dictation app that captures audio, transcribes speech, and forma
 - Voice shortcuts and learned corrections
 - Usage stats and configurable providers
 
+## Installation
+
+### Download from Releases (Recommended)
+
+1. Go to the [Releases page](https://github.com/JasonLovesDoggo/flow/releases)
+2. Download the latest `Flow-{version}-macOS-universal.pkg` file
+3. Double-click the downloaded .pkg file to install
+4. Flow will be installed to your Applications folder
+
+The universal binary works on both Apple Silicon (M1/M2/M3) and Intel Macs running macOS 14+.
+
+To verify the download integrity, you can check the SHA256 checksum:
+```sh
+shasum -a 256 Flow-*-macOS-universal.pkg
+# Compare with the .sha256 file from the release
+```
+
+### Build from Source
+
+See the [Setup](#setup) section below for instructions on building from source.
+
 ## Tech stack
 
 - Rust core engine in `flowwispr-core/`

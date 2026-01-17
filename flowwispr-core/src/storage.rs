@@ -138,6 +138,12 @@ impl Storage {
             "#,
         )?;
 
+        // Migration: Add raw_text column to transcription_history if it doesn't exist
+        let _ = conn.execute(
+            "ALTER TABLE transcription_history ADD COLUMN raw_text TEXT NOT NULL DEFAULT ''",
+            [],
+        );
+
         info!("Database schema initialized");
         Ok(())
     }
@@ -266,9 +272,9 @@ impl Storage {
         let conn = self.conn.lock();
         conn.execute(
             r#"
-            INSERT INTO transcription_history (id, status, text, error, duration_ms,
+            INSERT INTO transcription_history (id, status, text, raw_text, error, duration_ms,
                                                app_name, bundle_id, window_title, app_category, created_at)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
             "#,
             params![
                 entry.id.to_string(),
@@ -277,6 +283,7 @@ impl Storage {
                     TranscriptionStatus::Failed => "failed",
                 },
                 entry.text,
+                entry.raw_text,
                 entry.error,
                 entry.duration_ms as i64,
                 entry.app_context.as_ref().map(|c| &c.app_name),
@@ -301,7 +308,7 @@ impl Storage {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             r#"
-            SELECT id, status, text, error, duration_ms,
+            SELECT id, status, text, raw_text, error, duration_ms,
                    app_name, bundle_id, window_title, app_category, created_at
             FROM transcription_history
             ORDER BY created_at DESC
@@ -313,11 +320,11 @@ impl Storage {
             .query_map([limit as i64], |row| {
                 let id: String = row.get(0)?;
                 let status_str: String = row.get(1)?;
-                let app_name: Option<String> = row.get(5)?;
-                let bundle_id: Option<String> = row.get(6)?;
-                let window_title: Option<String> = row.get(7)?;
-                let app_category_str: Option<String> = row.get(8)?;
-                let created_at_str: String = row.get(9)?;
+                let app_name: Option<String> = row.get(6)?;
+                let bundle_id: Option<String> = row.get(7)?;
+                let window_title: Option<String> = row.get(8)?;
+                let app_category_str: Option<String> = row.get(9)?;
+                let created_at_str: String = row.get(10)?;
 
                 let app_context = app_name.map(|name| {
                     let category = app_category_str
@@ -342,8 +349,9 @@ impl Storage {
                     id: Uuid::parse_str(&id).unwrap_or_else(|_| Uuid::new_v4()),
                     status,
                     text: row.get(2)?,
-                    error: row.get(3)?,
-                    duration_ms: row.get::<_, i64>(4)? as u64,
+                    raw_text: row.get(3)?,
+                    error: row.get(4)?,
+                    duration_ms: row.get::<_, i64>(5)? as u64,
                     app_context,
                     created_at: DateTime::parse_from_rfc3339(&created_at_str)
                         .map(|dt| dt.with_timezone(&Utc))

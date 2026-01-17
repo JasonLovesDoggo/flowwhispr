@@ -104,6 +104,7 @@ pub struct TranscriptionHistoryEntry {
     pub id: TranscriptionId,
     pub status: TranscriptionStatus,
     pub text: String,
+    pub raw_text: String,
     pub error: Option<String>,
     pub duration_ms: u64,
     pub app_context: Option<AppContext>,
@@ -111,11 +112,12 @@ pub struct TranscriptionHistoryEntry {
 }
 
 impl TranscriptionHistoryEntry {
-    pub fn success(text: String, duration_ms: u64) -> Self {
+    pub fn success(raw_text: String, text: String, duration_ms: u64) -> Self {
         Self {
             id: Uuid::new_v4(),
             status: TranscriptionStatus::Success,
             text,
+            raw_text,
             error: None,
             duration_ms,
             app_context: None,
@@ -128,6 +130,7 @@ impl TranscriptionHistoryEntry {
             id: Uuid::new_v4(),
             status: TranscriptionStatus::Failed,
             text: String::new(),
+            raw_text: String::new(),
             error: Some(error),
             duration_ms,
             app_context: None,

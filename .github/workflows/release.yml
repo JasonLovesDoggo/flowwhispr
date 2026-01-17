@@ -1,0 +1,206 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos:
+    name: Build macOS Universal Binary
+    runs-on: macos-14  # Apple Silicon runner for faster arm64 builds
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$REF_TYPE" = "tag" ]; then
+            VERSION=${REF_NAME#refs/tags/v}
+          else
+            VERSION="dev-${SHA::7}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: flowwispr-core
+
+      - name: Build Rust library for Apple Silicon (aarch64)
+        run: |
+          cd flowwispr-core
+          cargo build --release --target aarch64-apple-darwin
+          ls -lh target/aarch64-apple-darwin/release/libflowwispr_core.a
+
+      - name: Build Rust library for Intel (x86_64)
+        run: |
+          cd flowwispr-core
+          cargo build --release --target x86_64-apple-darwin
+          ls -lh target/x86_64-apple-darwin/release/libflowwispr_core.a
+
+      - name: Create universal Rust library
+        run: |
+          cd flowwispr-core
+          mkdir -p target/release
+          lipo -create \
+            target/aarch64-apple-darwin/release/libflowwispr_core.a \
+            target/x86_64-apple-darwin/release/libflowwispr_core.a \
+            -output target/release/libflowwispr_core.a
+
+          echo "Universal library created:"
+          lipo -info target/release/libflowwispr_core.a
+          ls -lh target/release/libflowwispr_core.a
+
+      - name: Update Package.swift for release build
+        run: |
+          # Modify Package.swift to use release build instead of debug
+          sed -i '' 's|flowwispr-core/target/debug|flowwispr-core/target/release|g' Package.swift
+
+          # Verify the change
+          echo "Modified Package.swift linker settings:"
+          grep -A 2 "linkerSettings" Package.swift
+
+      - name: Build Swift universal binary
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+
+          echo "Swift build products:"
+          ls -lh .build/apple/Products/Release/
+
+      - name: Verify universal binary
+        run: |
+          lipo -info .build/apple/Products/Release/FlowWisprApp
+
+      - name: Create .app bundle structure
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          APP_NAME="Flow"
+          APP_BUNDLE="${APP_NAME}.app"
+          BUNDLE_ID="com.flowwispr.flow"
+
+          # Create bundle directories
+          mkdir -p "${APP_BUNDLE}/Contents/MacOS"
+          mkdir -p "${APP_BUNDLE}/Contents/Resources"
+
+          # Copy executable
+          cp .build/apple/Products/Release/FlowWisprApp "${APP_BUNDLE}/Contents/MacOS/Flow"
+          chmod +x "${APP_BUNDLE}/Contents/MacOS/Flow"
+
+          # Copy resources
+          if [ -f "menubar.svg" ]; then
+            cp menubar.svg "${APP_BUNDLE}/Contents/Resources/"
+          fi
+
+          # Create Info.plist
+          cat > "${APP_BUNDLE}/Contents/Info.plist" << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
+              <key>CFBundleExecutable</key>
+              <string>Flow</string>
+              <key>CFBundleIdentifier</key>
+              <string>${BUNDLE_ID}</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>${APP_NAME}</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${VERSION}</string>
+              <key>CFBundleVersion</key>
+              <string>${VERSION}</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>14.0</string>
+              <key>LSUIElement</key>
+              <true/>
+              <key>NSHumanReadableCopyright</key>
+              <string>Copyright © 2025</string>
+          </dict>
+          </plist>
+          EOF
+
+          echo "App bundle created:"
+          ls -lah "${APP_BUNDLE}/Contents/MacOS/"
+          ls -lah "${APP_BUNDLE}/Contents/Resources/" || true
+
+      - name: Build .pkg installer
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          APP_NAME="Flow"
+          PKG_NAME="Flow-${VERSION}-macOS-universal.pkg"
+          BUNDLE_ID="com.flowwispr.flow"
+
+          # Build component package
+          pkgbuild \
+            --identifier "${BUNDLE_ID}" \
+            --version "${VERSION}" \
+            --install-location "/Applications" \
+            --root "./${APP_NAME}.app" \
+            --component-plist /dev/null \
+            "Flow-component.pkg"
+
+          # Create distribution package
+          productbuild \
+            --package "Flow-component.pkg" \
+            --identifier "${BUNDLE_ID}" \
+            "${PKG_NAME}"
+
+          # Clean up component package
+          rm "Flow-component.pkg"
+
+          echo "Package created:"
+          ls -lh "${PKG_NAME}"
+
+          # Store package name for later steps
+          echo "pkg_name=${PKG_NAME}" >> $GITHUB_ENV
+
+      - name: Generate checksum
+        run: |
+          shasum -a 256 "${{ env.pkg_name }}" > "${{ env.pkg_name }}.sha256"
+          cat "${{ env.pkg_name }}.sha256"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ${{ env.pkg_name }}
+            ${{ env.pkg_name }}.sha256
+          draft: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact for manual workflow runs
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-macos-universal
+          path: |
+            ${{ env.pkg_name }}
+            ${{ env.pkg_name }}.sha256
+          retention-days: 7
