@@ -11,6 +11,15 @@ import SwiftUI
 struct FlowWisprApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
+    
+    private var menuBarIcon: NSImage? {
+        guard let iconURL = Bundle.module.url(forResource: "flow_wispr_menubar_18x18", withExtension: "png"),
+              let icon = NSImage(contentsOf: iconURL) else {
+            return nil
+        }
+        icon.isTemplate = true
+        return icon
+    }
 
     var body: some Scene {
         // main window
@@ -29,9 +38,10 @@ struct FlowWisprApp: App {
             MenuBarView()
                 .environmentObject(appState)
         } label: {
-            Image(systemName: appState.isRecording ? "mic.fill" : "mic")
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(appState.isRecording ? .red : .primary)
+            if let icon = menuBarIcon {
+                Image(nsImage: icon)
+                    .foregroundStyle(appState.isRecording ? .red : .primary)
+            }
         }
         .menuBarExtraStyle(.menu)
     }

@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
 
     /// Current recording state
     @Published var isRecording = false
+    @Published var isProcessing = false
 
     /// Last transcribed text
     @Published var lastTranscription: String?
@@ -133,9 +134,6 @@ final class AppState: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshAccessibilityStatus()
-                if let self, self.isRecording {
-                    self.recordingIndicator?.hide()
-                }
             }
         }
 
@@ -145,10 +143,7 @@ final class AppState: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                if let self, self.isRecording {
-                    self.ensureRecordingIndicator()
-                    self.recordingIndicator?.show()
-                }
+                self?.updateRecordingIndicatorVisibility()
             }
         }
     }
@@ -289,11 +284,9 @@ final class AppState: ObservableObject {
         pauseMediaPlayback()
         if engine.startRecording() {
             isRecording = true
+            isProcessing = false
+            updateRecordingIndicatorVisibility()
             recordingDuration = 0
-            if !NSApp.isActive {
-                ensureRecordingIndicator()
-                recordingIndicator?.show()
-            }
 
             recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
                 Task { @MainActor in
@@ -314,11 +307,13 @@ final class AppState: ObservableObject {
 
         let duration = engine.stopRecording()
         isRecording = false
-        recordingIndicator?.hide()
         resumeMediaPlayback()
 
         if duration > 0 {
+            setProcessing(true)
             transcribe()
+        } else {
+            updateRecordingIndicatorVisibility()
         }
     }
 
@@ -334,17 +329,20 @@ final class AppState: ObservableObject {
                     activateTargetAppIfNeeded()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                         self?.pasteText()
+                        self?.finishProcessing()
                     }
                     refreshHistory()
                 } else {
                     errorMessage = engine.lastError ?? "Transcription failed"
                     refreshHistory()
+                    finishProcessing()
                 }
             }
         }
     }
 
     func retryLastTranscription() {
+        setProcessing(true)
         Task {
             let result = engine.retryLastTranscription(appName: currentApp)
             await MainActor.run {
@@ -356,11 +354,13 @@ final class AppState: ObservableObject {
                     activateTargetAppIfNeeded()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
                         self?.pasteText()
+                        self?.finishProcessing()
                     }
                     refreshHistory()
                 } else {
                     errorMessage = engine.lastError ?? "Retry failed"
                     refreshHistory()
+                    finishProcessing()
                 }
             }
         }
@@ -393,6 +393,24 @@ final class AppState: ObservableObject {
     private func ensureRecordingIndicator() {
         if recordingIndicator == nil {
             recordingIndicator = RecordingIndicatorWindow(appState: self)
+        }
+    }
+
+    private func setProcessing(_ processing: Bool) {
+        isProcessing = processing
+        updateRecordingIndicatorVisibility()
+    }
+
+    private func finishProcessing() {
+        setProcessing(false)
+    }
+
+    private func updateRecordingIndicatorVisibility() {
+        if isRecording || isProcessing {
+            ensureRecordingIndicator()
+            recordingIndicator?.show()
+        } else {
+            recordingIndicator?.hide()
         }
     }
 

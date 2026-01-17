@@ -2,7 +2,7 @@
 // RecordingIndicatorWindow.swift
 // FlowWispr
 //
-// Lightweight, non-activating recording indicator shown when the app is not frontmost.
+// Lightweight, non-activating recording indicator shown while recording or processing.
 //
 
 import AppKit
@@ -27,7 +27,7 @@ final class RecordingIndicatorWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
-        panel.setFrame(NSRect(x: 0, y: 0, width: 220, height: 44), display: false)
+        panel.setFrame(NSRect(x: 0, y: 0, width: 200, height: 32), display: false)
 
         self.window = panel
         positionWindow()
@@ -46,10 +46,10 @@ final class RecordingIndicatorWindow {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
         let size = window.frame.size
-        let padding: CGFloat = 16
+        let padding: CGFloat = 12
         let origin = CGPoint(
             x: screenFrame.midX - size.width / 2,
-            y: screenFrame.maxY - size.height - padding
+            y: screenFrame.minY + padding
         )
         window.setFrameOrigin(origin)
     }
@@ -62,39 +62,40 @@ private struct RecordingIndicatorView: View {
     var body: some View {
         HStack(spacing: FW.spacing8) {
             Circle()
-                .fill(FW.recording)
-                .frame(width: 10, height: 10)
-                .opacity(pulse ? 0.5 : 1.0)
+                .fill(appState.isRecording ? FW.recording : FW.accent)
+                .frame(width: 8, height: 8)
+                .opacity(pulse ? 0.6 : 1.0)
 
-            Text("Recording")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.white)
+            if appState.isRecording {
+                CompactWaveformView(isRecording: true)
+                    .frame(width: 90, height: 18)
+                    .transition(.opacity)
+            }
 
-            Text(formatDuration(appState.recordingDuration))
-                .font(FW.fontMonoSmall)
-                .foregroundStyle(.white.opacity(0.8))
+            if appState.isProcessing {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+                    .tint(.white.opacity(0.9))
+                    .transition(.opacity)
+            }
         }
         .padding(.horizontal, FW.spacing12)
         .padding(.vertical, FW.spacing6)
         .background {
             Capsule()
-                .fill(Color.black.opacity(0.7))
+                .fill(Color.black.opacity(0.55))
                 .overlay {
                     Capsule()
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                 }
         }
+        .animation(.easeInOut(duration: 0.2), value: appState.isRecording)
+        .animation(.easeInOut(duration: 0.2), value: appState.isProcessing)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
                 pulse = true
             }
         }
-    }
-
-    private func formatDuration(_ ms: UInt64) -> String {
-        let seconds = ms / 1000
-        let minutes = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", minutes, secs)
     }
 }

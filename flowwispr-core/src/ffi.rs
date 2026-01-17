@@ -26,7 +26,9 @@ use crate::providers::{
     OpenAITranscriptionProvider, TranscriptionProvider, TranscriptionRequest,
 };
 use crate::shortcuts::ShortcutsEngine;
-use crate::storage::Storage;
+use crate::storage::{
+    SETTING_ANTHROPIC_API_KEY, SETTING_COMPLETION_PROVIDER, SETTING_OPENAI_API_KEY, Storage,
+};
 use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
 
 /// Opaque handle to the FlowWhispr engine
@@ -71,6 +73,38 @@ fn clear_last_error(handle: &FlowWhisprHandle) {
 fn estimate_duration_ms(bytes: usize, sample_rate: u32) -> u64 {
     let samples = bytes / 2;
     (samples as u64 * 1000) / sample_rate as u64
+}
+
+fn load_persisted_configuration(handle: &mut FlowWhisprHandle) {
+    let openai_key = match handle.storage.get_setting(SETTING_OPENAI_API_KEY) {
+        Ok(value) => value,
+        Err(e) => {
+            error!("Failed to load OpenAI key: {}", e);
+            None
+        }
+    };
+
+    let anthropic_key = match handle.storage.get_setting(SETTING_ANTHROPIC_API_KEY) {
+        Ok(value) => value,
+        Err(e) => {
+            error!("Failed to load Anthropic key: {}", e);
+            None
+        }
+    };
+
+    let provider = match handle.storage.get_setting(SETTING_COMPLETION_PROVIDER) {
+        Ok(value) => value,
+        Err(e) => {
+            error!("Failed to load completion provider: {}", e);
+            None
+        }
+    };
+
+    handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key.clone()));
+    handle.completion = match provider.as_deref() {
+        Some("anthropic") => Arc::new(AnthropicCompletionProvider::new(anthropic_key)),
+        _ => Arc::new(OpenAICompletionProvider::new(openai_key)),
+    };
 }
 
 // ============ Lifecycle ============
@@ -125,7 +159,7 @@ pub extern "C" fn flowwispr_init(db_path: *const c_char) -> *mut FlowWhisprHandl
     let app_tracker = AppTracker::new();
     let style_learner = StyleLearner::new();
 
-    let handle = FlowWhisprHandle {
+    let mut handle = FlowWhisprHandle {
         runtime,
         storage,
         audio: Mutex::new(None),
@@ -140,6 +174,8 @@ pub extern "C" fn flowwispr_init(db_path: *const c_char) -> *mut FlowWhisprHandl
         app_tracker,
         style_learner: Mutex::new(style_learner),
     };
+
+    load_persisted_configuration(&mut handle);
 
     debug!("FlowWhispr engine initialized");
 
@@ -681,6 +717,23 @@ pub extern "C" fn flowwispr_set_api_key(
         return false;
     }
 
+    if let Err(e) = handle.storage.set_setting(SETTING_OPENAI_API_KEY, &key) {
+        let message = format!("Failed to save OpenAI API key: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
+    if let Err(e) = handle
+        .storage
+        .set_setting(SETTING_COMPLETION_PROVIDER, "openai")
+    {
+        let message = format!("Failed to save completion provider: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
     // reinitialize providers with new key
     handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key.clone())));
     handle.completion = Arc::new(OpenAICompletionProvider::new(Some(key)));
@@ -921,6 +974,23 @@ pub extern "C" fn flowwispr_set_anthropic_key(
         Err(_) => return false,
     };
 
+    if let Err(e) = handle.storage.set_setting(SETTING_ANTHROPIC_API_KEY, &key) {
+        let message = format!("Failed to save Anthropic API key: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
+    if let Err(e) = handle
+        .storage
+        .set_setting(SETTING_COMPLETION_PROVIDER, "anthropic")
+    {
+        let message = format!("Failed to save completion provider: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
     handle.completion = Arc::new(AnthropicCompletionProvider::new(Some(key)));
     debug!("Switched to Anthropic completion provider");
 
@@ -949,10 +1019,40 @@ pub extern "C" fn flowwispr_set_completion_provider(
 
     match provider {
         0 => {
+            if let Err(e) = handle.storage.set_setting(SETTING_OPENAI_API_KEY, &key) {
+                let message = format!("Failed to save OpenAI API key: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return false;
+            }
+            if let Err(e) = handle
+                .storage
+                .set_setting(SETTING_COMPLETION_PROVIDER, "openai")
+            {
+                let message = format!("Failed to save completion provider: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return false;
+            }
             handle.completion = Arc::new(OpenAICompletionProvider::new(Some(key)));
             debug!("Set completion provider to OpenAI");
         }
         1 => {
+            if let Err(e) = handle.storage.set_setting(SETTING_ANTHROPIC_API_KEY, &key) {
+                let message = format!("Failed to save Anthropic API key: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return false;
+            }
+            if let Err(e) = handle
+                .storage
+                .set_setting(SETTING_COMPLETION_PROVIDER, "anthropic")
+            {
+                let message = format!("Failed to save completion provider: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return false;
+            }
             handle.completion = Arc::new(AnthropicCompletionProvider::new(Some(key)));
             debug!("Set completion provider to Anthropic");
         }

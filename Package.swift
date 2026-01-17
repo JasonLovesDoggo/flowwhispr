@@ -49,7 +49,11 @@ let package = Package(
             dependencies: [
                 "FlowWispr",
             ],
-            path: "Sources/FlowWisprApp"
+            path: "Sources/FlowWisprApp",
+            resources: [
+                .copy("../../flow_wispr_menubar_18x18.png"),
+                .copy("../../flow_wispr_menubar_18x18@2x.png"),
+            ]
         ),
     ]
 )

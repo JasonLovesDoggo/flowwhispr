@@ -18,6 +18,10 @@ pub struct Storage {
     conn: Mutex<Connection>,
 }
 
+pub const SETTING_OPENAI_API_KEY: &str = "openai_api_key";
+pub const SETTING_ANTHROPIC_API_KEY: &str = "anthropic_api_key";
+pub const SETTING_COMPLETION_PROVIDER: &str = "completion_provider";
+
 impl Storage {
     /// Open or create a database at the given path
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -118,6 +122,12 @@ impl Storage {
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_transcriptions_created ON transcriptions(created_at);
             CREATE INDEX IF NOT EXISTS idx_shortcuts_trigger ON shortcuts(trigger);
             CREATE INDEX IF NOT EXISTS idx_corrections_original ON corrections(original);
@@ -167,6 +177,36 @@ impl Storage {
         )?;
         debug!("Saved transcription {}", transcription.id);
         Ok(())
+    }
+
+    // ========== Settings ==========
+
+    /// Save or update a setting value
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self.conn.lock();
+        conn.execute(
+            r#"
+            INSERT INTO settings (key, value, updated_at)
+            VALUES (?1, ?2, ?3)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            "#,
+            params![key, value, Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    /// Get a setting value
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![key],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(Into::into)
     }
 
     /// Get recent transcriptions
@@ -792,5 +832,17 @@ mod tests {
 
         let mode = storage.get_app_mode("Unknown App").unwrap();
         assert_eq!(mode, None);
+    }
+
+    #[test]
+    fn test_settings_roundtrip() {
+        let storage = Storage::in_memory().unwrap();
+
+        storage
+            .set_setting(SETTING_OPENAI_API_KEY, "test-key")
+            .unwrap();
+
+        let value = storage.get_setting(SETTING_OPENAI_API_KEY).unwrap();
+        assert_eq!(value, Some("test-key".to_string()));
     }
 }

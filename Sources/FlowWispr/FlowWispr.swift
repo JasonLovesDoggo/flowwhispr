@@ -74,13 +74,6 @@ public enum CompletionProvider: UInt8, Sendable {
 
 /// Main interface to the FlowWispr engine
 public final class FlowWispr: @unchecked Sendable {
-    private enum KeychainAccount {
-        static let openAI = "openai-api-key"
-        static let anthropic = "anthropic-api-key"
-    }
-
-    private static let completionProviderDefaultsKey = "flowwispr.completionProvider"
-
     private let handle: OpaquePointer?
 
     /// Initialize the FlowWispr engine
@@ -94,7 +87,6 @@ public final class FlowWispr: @unchecked Sendable {
             handle = flowwispr_init(nil)
         }
 
-        loadPersistedConfiguration()
     }
 
     deinit {
@@ -285,11 +277,6 @@ public final class FlowWispr: @unchecked Sendable {
             flowwispr_set_api_key(handle, cKey)
         }
 
-        if isSet {
-            KeychainStore.save(trimmedKey, account: KeychainAccount.openAI)
-            UserDefaults.standard.set(CompletionProvider.openAI.rawValue, forKey: Self.completionProviderDefaultsKey)
-        }
-
         return isSet
     }
 
@@ -432,11 +419,6 @@ public final class FlowWispr: @unchecked Sendable {
             flowwispr_set_anthropic_key(handle, cKey)
         }
 
-        if isSet {
-            KeychainStore.save(trimmedKey, account: KeychainAccount.anthropic)
-            UserDefaults.standard.set(CompletionProvider.anthropic.rawValue, forKey: Self.completionProviderDefaultsKey)
-        }
-
         return isSet
     }
 
@@ -452,12 +434,6 @@ public final class FlowWispr: @unchecked Sendable {
             flowwispr_set_completion_provider(handle, provider.rawValue, cKey)
         }
 
-        if isSet {
-            let account = provider == .anthropic ? KeychainAccount.anthropic : KeychainAccount.openAI
-            KeychainStore.save(trimmedKey, account: account)
-            UserDefaults.standard.set(provider.rawValue, forKey: Self.completionProviderDefaultsKey)
-        }
-
         return isSet
     }
 
@@ -468,23 +444,5 @@ public final class FlowWispr: @unchecked Sendable {
         return CompletionProvider(rawValue: rawValue)
     }
 
-    private func loadPersistedConfiguration() {
-        guard let handle = handle else { return }
-
-        if let openAIKey = KeychainStore.load(account: KeychainAccount.openAI) {
-            _ = openAIKey.withCString { cKey in
-                flowwispr_set_api_key(handle, cKey)
-            }
-        }
-
-        let providerRawValue = UserDefaults.standard.object(forKey: Self.completionProviderDefaultsKey) as? UInt8
-        let provider = providerRawValue.flatMap { CompletionProvider(rawValue: $0) }
-
-        if provider == .anthropic,
-           let anthropicKey = KeychainStore.load(account: KeychainAccount.anthropic) {
-            _ = anthropicKey.withCString { cKey in
-                flowwispr_set_anthropic_key(handle, cKey)
-            }
-        }
-    }
+    // Configuration persistence is handled in the core database.
 }
