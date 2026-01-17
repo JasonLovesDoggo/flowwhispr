@@ -154,6 +154,20 @@ impl AudioCapture {
         Ok(audio_data)
     }
 
+    /// Stop recording without draining the buffer
+    pub fn stop_stream(&mut self) -> Result<()> {
+        *self.state.lock() = CaptureState::Idle;
+        self.stream = None;
+        info!("Audio capture stopped (buffer retained)");
+        Ok(())
+    }
+
+    /// Drain buffered audio into PCM data without touching the stream
+    pub fn take_buffered_audio(&mut self) -> AudioData {
+        let samples = std::mem::take(&mut *self.buffer.lock());
+        self.samples_to_pcm(&samples)
+    }
+
     /// Pause recording (keeps stream alive but stops buffering)
     pub fn pause(&mut self) {
         *self.state.lock() = CaptureState::Paused;

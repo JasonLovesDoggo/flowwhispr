@@ -12,6 +12,11 @@ struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
     @State private var step: Step = .welcome
     @State private var openAIKey = ""
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case apiKey
+    }
 
     private enum Step: Int, CaseIterable {
         case welcome
@@ -46,6 +51,7 @@ struct OnboardingView: View {
             appState.refreshAccessibilityStatus()
         }
         .onChange(of: step) { _, newStep in
+            focusedField = newStep == .apiKey ? .apiKey : nil
             if newStep != .hotkey && appState.isCapturingHotkey {
                 appState.endHotkeyCapture()
             }
@@ -97,6 +103,12 @@ struct OnboardingView: View {
                 SecureField("sk-...", text: $openAIKey)
                     .textFieldStyle(.roundedBorder)
                     .font(FW.fontMonoSmall)
+                    .focused($focusedField, equals: .apiKey)
+                    .onSubmit {
+                        if !openAIKey.isEmpty {
+                            handleAdvance()
+                        }
+                    }
 
                 if appState.isConfigured {
                     Text("API key saved")
@@ -213,6 +225,7 @@ struct OnboardingView: View {
 
     private var advanceLabel: String {
         if step == .hotkey { return "Finish" }
+        if step == .apiKey && !openAIKey.isEmpty { return "Save and Continue" }
         if step == .apiKey && openAIKey.isEmpty && !appState.isConfigured { return "Skip for now" }
         if step == .accessibility && !appState.isAccessibilityEnabled { return "Continue without" }
         return "Next"

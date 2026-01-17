@@ -13,6 +13,7 @@ use std::ptr;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use serde::Serialize;
 use tokio::runtime::Runtime;
 use tracing::{debug, error};
 
@@ -26,13 +27,15 @@ use crate::providers::{
 };
 use crate::shortcuts::ShortcutsEngine;
 use crate::storage::Storage;
-use crate::types::Shortcut;
+use crate::types::{Shortcut, Transcription};
 
 /// Opaque handle to the FlowWhispr engine
 pub struct FlowWhisprHandle {
     runtime: Runtime,
     storage: Storage,
     audio: Mutex<Option<AudioCapture>>,
+    last_audio: Mutex<Option<crate::AudioData>>,
+    last_error: Mutex<Option<String>>,
     transcription: Arc<dyn TranscriptionProvider>,
     completion: Arc<dyn CompletionProvider>,
     shortcuts: ShortcutsEngine,
@@ -42,8 +45,24 @@ pub struct FlowWhisprHandle {
     style_learner: Mutex<StyleLearner>,
 }
 
+#[derive(Serialize)]
+struct TranscriptionSummary {
+    id: String,
+    text: String,
+    created_at: String,
+    app_name: Option<String>,
+}
+
 /// Result callback type for async operations
 pub type ResultCallback = extern "C" fn(success: bool, result: *const c_char, context: *mut c_void);
+
+fn set_last_error(handle: &FlowWhisprHandle, message: impl Into<String>) {
+    *handle.last_error.lock() = Some(message.into());
+}
+
+fn clear_last_error(handle: &FlowWhisprHandle) {
+    *handle.last_error.lock() = None;
+}
 
 // ============ Lifecycle ============
 
@@ -101,6 +120,8 @@ pub extern "C" fn flowwhispr_init(db_path: *const c_char) -> *mut FlowWhisprHand
         runtime,
         storage,
         audio: Mutex::new(None),
+        last_audio: Mutex::new(None),
+        last_error: Mutex::new(None),
         transcription: Arc::new(OpenAITranscriptionProvider::new(None)),
         completion: Arc::new(OpenAICompletionProvider::new(None)),
         shortcuts,
@@ -141,7 +162,9 @@ pub extern "C" fn flowwhispr_start_recording(handle: *mut FlowWhisprHandle) -> b
         match AudioCapture::new() {
             Ok(capture) => *audio_lock = Some(capture),
             Err(e) => {
-                error!("Failed to create audio capture: {}", e);
+                let message = format!("Failed to create audio capture: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
                 return false;
             }
         }
@@ -149,13 +172,19 @@ pub extern "C" fn flowwhispr_start_recording(handle: *mut FlowWhisprHandle) -> b
 
     if let Some(ref mut capture) = *audio_lock {
         match capture.start() {
-            Ok(_) => true,
+            Ok(_) => {
+                clear_last_error(handle);
+                true
+            }
             Err(e) => {
-                error!("Failed to start recording: {}", e);
+                let message = format!("Failed to start recording: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
                 false
             }
         }
     } else {
+        set_last_error(handle, "Audio capture unavailable");
         false
     }
 }
@@ -169,14 +198,20 @@ pub extern "C" fn flowwhispr_stop_recording(handle: *mut FlowWhisprHandle) -> u6
 
     if let Some(ref mut capture) = *audio_lock {
         let duration = capture.buffer_duration_ms();
-        match capture.stop() {
-            Ok(_) => duration,
+        match capture.stop_stream() {
+            Ok(_) => {
+                clear_last_error(handle);
+                duration
+            }
             Err(e) => {
-                error!("Failed to stop recording: {}", e);
+                let message = format!("Failed to stop recording: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
                 0
             }
         }
     } else {
+        set_last_error(handle, "Audio capture unavailable");
         0
     }
 }
@@ -196,6 +231,52 @@ pub extern "C" fn flowwhispr_is_recording(handle: *mut FlowWhisprHandle) -> bool
 
 // ============ Transcription ============
 
+fn transcribe_with_audio(
+    handle: &FlowWhisprHandle,
+    audio_data: crate::AudioData,
+    app_name: Option<String>,
+) -> crate::error::Result<String> {
+    let mode = if let Some(ref name) = app_name {
+        let mut modes = handle.modes.lock();
+        modes.get_mode_with_storage(name, &handle.storage)
+    } else {
+        WritingMode::Casual
+    };
+
+    let transcription_provider = Arc::clone(&handle.transcription);
+    let completion_provider = Arc::clone(&handle.completion);
+    let app_context = handle.app_tracker.current_app();
+
+    let transcription = handle.runtime.block_on(async {
+        let request = TranscriptionRequest::new(audio_data, 16000);
+        transcription_provider.transcribe(request).await
+    })?;
+
+    let (text_with_shortcuts, _triggered) = handle.shortcuts.process(&transcription.text);
+    let (text_with_corrections, _applied) = handle.learning.apply_corrections(&text_with_shortcuts);
+
+    let completion = handle.runtime.block_on(async {
+        let completion_request = CompletionRequest::new(text_with_corrections, mode)
+            .with_app_context(app_name.unwrap_or_default());
+        completion_provider.complete(completion_request).await
+    })?;
+
+    let mut record = Transcription::new(
+        transcription.text,
+        completion.text.clone(),
+        transcription.confidence.unwrap_or(0.0),
+        transcription.duration_ms,
+    );
+    if let Some(context) = app_context {
+        record.app_context = Some(context);
+    }
+    if let Err(e) = handle.storage.save_transcription(&record) {
+        error!("Failed to save transcription: {}", e);
+    }
+
+    Ok(completion.text)
+}
+
 /// Transcribe the recorded audio and process it
 /// Returns the processed text (caller must free with flowwhispr_free_string)
 /// Returns null on failure
@@ -210,20 +291,21 @@ pub extern "C" fn flowwhispr_transcribe(
     let audio_data = {
         let mut audio_lock = handle.audio.lock();
         if let Some(ref mut capture) = *audio_lock {
-            match capture.stop() {
-                Ok(data) => data,
-                Err(e) => {
-                    error!("Failed to get audio data: {}", e);
-                    return ptr::null_mut();
-                }
+            if let Err(e) = capture.stop_stream() {
+                let message = format!("Failed to stop recording: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return ptr::null_mut();
             }
+            capture.take_buffered_audio()
         } else {
-            error!("No audio capture available");
+            set_last_error(handle, "No audio capture available");
             return ptr::null_mut();
         }
     };
 
     if audio_data.is_empty() {
+        set_last_error(handle, "No audio captured");
         return ptr::null_mut();
     }
 
@@ -237,45 +319,69 @@ pub extern "C" fn flowwhispr_transcribe(
         None
     };
 
-    // get writing mode for app
-    let mode = if let Some(ref name) = app {
-        let mut modes = handle.modes.lock();
-        modes.get_mode_with_storage(name, &handle.storage)
-    } else {
-        WritingMode::Casual
-    };
-
-    // transcribe
-    let transcription_provider = Arc::clone(&handle.transcription);
-    let completion_provider = Arc::clone(&handle.completion);
-
-    let result = handle.runtime.block_on(async {
-        // transcribe audio
-        let request = TranscriptionRequest::new(audio_data, 16000);
-        let transcription = transcription_provider.transcribe(request).await?;
-
-        // process shortcuts
-        let (text_with_shortcuts, _triggered) = handle.shortcuts.process(&transcription.text);
-
-        // apply learned corrections
-        let (text_with_corrections, _applied) =
-            handle.learning.apply_corrections(&text_with_shortcuts);
-
-        // format with completion provider
-        let completion_request = CompletionRequest::new(text_with_corrections, mode)
-            .with_app_context(app.unwrap_or_default());
-        let completion = completion_provider.complete(completion_request).await?;
-
-        Ok::<String, crate::error::Error>(completion.text)
-    });
+    *handle.last_audio.lock() = Some(audio_data.clone());
+    let result = transcribe_with_audio(handle, audio_data, app);
 
     match result {
-        Ok(text) => match CString::new(text) {
-            Ok(cstr) => cstr.into_raw(),
-            Err(_) => ptr::null_mut(),
-        },
+        Ok(text) => {
+            clear_last_error(handle);
+            *handle.last_audio.lock() = None;
+            match CString::new(text) {
+                Ok(cstr) => cstr.into_raw(),
+                Err(_) => ptr::null_mut(),
+            }
+        }
         Err(e) => {
-            error!("Transcription failed: {}", e);
+            let message = format!("Transcription failed: {e}");
+            error!("{message}");
+            set_last_error(handle, message);
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Retry the last transcription using cached audio
+/// Returns processed text (caller must free with flowwhispr_free_string), or null on failure
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwhispr_retry_last_transcription(
+    handle: *mut FlowWhisprHandle,
+    app_name: *const c_char,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    let audio_data = {
+        let mut last_audio = handle.last_audio.lock();
+        match last_audio.take() {
+            Some(data) => data,
+            None => {
+                set_last_error(handle, "No previous recording to retry");
+                return ptr::null_mut();
+            }
+        }
+    };
+
+    let app = if !app_name.is_null() {
+        unsafe { CStr::from_ptr(app_name) }
+            .to_str()
+            .ok()
+            .map(String::from)
+    } else {
+        None
+    };
+
+    let result = transcribe_with_audio(handle, audio_data, app);
+
+    match result {
+        Ok(text) => {
+            clear_last_error(handle);
+            match CString::new(text) {
+                Ok(cstr) => cstr.into_raw(),
+                Err(_) => ptr::null_mut(),
+            }
+        }
+        Err(e) => {
+            let message = format!("Transcription failed: {e}");
+            error!("{message}");
+            set_last_error(handle, message);
             ptr::null_mut()
         }
     }
