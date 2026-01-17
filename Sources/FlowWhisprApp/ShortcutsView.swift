@@ -16,63 +16,45 @@ struct ShortcutsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // toolbar
+            // header
             HStack {
-                Text("Voice Shortcuts")
-                    .font(.headline)
-                Spacer()
-                Button(action: { showingAddSheet = true }) {
-                    Image(systemName: "plus")
+                VStack(alignment: .leading, spacing: FW.spacing2) {
+                    Text("Shortcuts")
+                        .font(.title3.weight(.semibold))
+
+                    Text("Expand phrases while dictating")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
                 }
+
+                Spacer()
+
+                Button {
+                    showingAddSheet = true
+                } label: {
+                    HStack(spacing: FW.spacing4) {
+                        Image(systemName: "plus")
+                        Text("Add")
+                    }
+                }
+                .buttonStyle(FWSecondaryButtonStyle())
             }
-            .padding()
+            .padding(FW.spacing16)
 
             Divider()
 
             // list
             if shortcuts.isEmpty {
-                ContentUnavailableView {
-                    Label("No Shortcuts", systemImage: "text.badge.plus")
-                } description: {
-                    Text("Add shortcuts to quickly expand phrases while dictating.")
-                } actions: {
-                    Button("Add Shortcut") {
-                        showingAddSheet = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState
             } else {
-                List {
-                    ForEach(shortcuts) { shortcut in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(shortcut.trigger)
-                                    .font(.headline)
-                                Text(shortcut.replacement)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-
-                            Spacer()
-
-                            if shortcut.useCount > 0 {
-                                Text("\(shortcut.useCount) uses")
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                            }
-
-                            Button(action: { deleteShortcut(shortcut) }) {
-                                Image(systemName: "trash")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.plain)
+                ScrollView {
+                    LazyVStack(spacing: FW.spacing8) {
+                        ForEach(shortcuts) { shortcut in
+                            shortcutRow(shortcut)
                         }
-                        .padding(.vertical, 4)
                     }
+                    .padding(FW.spacing16)
                 }
-                .listStyle(.plain)
             }
         }
         .frame(width: 480, height: 400)
@@ -86,6 +68,71 @@ struct ShortcutsView: View {
         }
         .onAppear {
             refreshShortcuts()
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: FW.spacing16) {
+            Image(systemName: "text.badge.plus")
+                .font(.system(size: 48))
+                .foregroundStyle(FW.textTertiary)
+
+            VStack(spacing: FW.spacing4) {
+                Text("No shortcuts yet")
+                    .font(.headline)
+
+                Text("Add shortcuts to quickly expand phrases")
+                    .font(.subheadline)
+                    .foregroundStyle(FW.textSecondary)
+            }
+
+            Button("Add Shortcut") {
+                showingAddSheet = true
+            }
+            .buttonStyle(FWPrimaryButtonStyle())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func shortcutRow(_ shortcut: ShortcutItem) -> some View {
+        HStack(spacing: FW.spacing12) {
+            VStack(alignment: .leading, spacing: FW.spacing4) {
+                Text(shortcut.trigger)
+                    .font(.headline)
+                    .foregroundStyle(FW.accent)
+
+                Text(shortcut.replacement)
+                    .font(.subheadline)
+                    .foregroundStyle(FW.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            if shortcut.useCount > 0 {
+                Text("\(shortcut.useCount)")
+                    .font(FW.fontMonoSmall)
+                    .foregroundStyle(FW.textTertiary)
+                    .padding(.horizontal, FW.spacing8)
+                    .padding(.vertical, FW.spacing4)
+                    .background {
+                        Capsule()
+                            .fill(FW.surfaceElevated)
+                    }
+            }
+
+            Button {
+                deleteShortcut(shortcut)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(FW.recording.opacity(0.8))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(FW.spacing12)
+        .background {
+            RoundedRectangle(cornerRadius: FW.radiusSmall)
+                .fill(FW.surfaceElevated.opacity(0.5))
         }
     }
 
@@ -136,35 +183,57 @@ struct AddShortcutSheet: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Add Voice Shortcut")
-                .font(.headline)
+        VStack(spacing: FW.spacing24) {
+            // header
+            VStack(spacing: FW.spacing4) {
+                Text("Add Shortcut")
+                    .font(.title3.weight(.semibold))
 
-            Form {
-                TextField("Trigger phrase", text: $trigger)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Replacement text", text: $replacement)
-                    .textFieldStyle(.roundedBorder)
+                Text("Say the trigger phrase to expand it")
+                    .font(.caption)
+                    .foregroundStyle(FW.textTertiary)
             }
-            .formStyle(.grouped)
 
+            // form
+            VStack(spacing: FW.spacing16) {
+                VStack(alignment: .leading, spacing: FW.spacing4) {
+                    Text("Trigger")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(FW.textSecondary)
+
+                    TextField("e.g., 'my email'", text: $trigger)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                VStack(alignment: .leading, spacing: FW.spacing4) {
+                    Text("Replacement")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(FW.textSecondary)
+
+                    TextField("e.g., 'hello@example.com'", text: $replacement)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            // buttons
             HStack {
                 Button("Cancel") {
                     onCancel()
                 }
                 .keyboardShortcut(.cancelAction)
+                .buttonStyle(FWGhostButtonStyle())
 
                 Spacer()
 
                 Button("Add") {
                     onAdd()
                 }
-                .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(FWPrimaryButtonStyle())
                 .disabled(trigger.isEmpty || replacement.isEmpty)
             }
         }
-        .padding()
+        .padding(FW.spacing24)
         .frame(width: 360)
     }
 }

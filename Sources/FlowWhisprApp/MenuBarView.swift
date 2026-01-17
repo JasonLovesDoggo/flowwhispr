@@ -15,16 +15,23 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // header
-            HStack {
-                Text("FlowWhispr")
-                    .font(.headline)
-                Spacer()
-                Circle()
-                    .fill(appState.isConfigured ? .green : .orange)
-                    .frame(width: 8, height: 8)
+            // header with mini waveform
+            VStack(spacing: FW.spacing8) {
+                HStack {
+                    Text("FlowWhispr")
+                        .font(.headline)
+                        .foregroundStyle(FW.textPrimary)
+
+                    Spacer()
+
+                    Circle()
+                        .fill(appState.isConfigured ? FW.success : FW.warning)
+                        .frame(width: 8, height: 8)
+                }
+
+                CompactWaveformView(isRecording: appState.isRecording)
             }
-            .padding()
+            .padding(FW.spacing16)
 
             Divider()
 
@@ -32,59 +39,71 @@ struct MenuBarView: View {
             Button(action: { appState.toggleRecording() }) {
                 HStack {
                     Image(systemName: appState.isRecording ? "stop.fill" : "mic.fill")
-                        .foregroundStyle(appState.isRecording ? .red : .primary)
-                    Text(appState.isRecording ? "Stop Recording" : "Start Recording")
+                        .foregroundStyle(appState.isRecording ? FW.recording : FW.accent)
+                        .frame(width: 20)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(appState.isRecording ? "Stop Recording" : "Start Recording")
+                            .foregroundStyle(FW.textPrimary)
+
+                        if appState.isRecording {
+                            Text(formatDuration(appState.recordingDuration))
+                                .font(FW.fontMonoSmall)
+                                .foregroundStyle(FW.recording)
+                        }
+                    }
+
                     Spacer()
+
                     Text("⌥ Space")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(FW.fontMonoSmall)
+                        .foregroundStyle(FW.textTertiary)
                 }
+                .padding(.horizontal, FW.spacing16)
+                .padding(.vertical, FW.spacing12)
+                .background(appState.isRecording ? FW.recording.opacity(0.1) : Color.clear)
             }
             .buttonStyle(.plain)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-
-            if appState.isRecording {
-                HStack {
-                    Circle()
-                        .fill(.red)
-                        .frame(width: 8, height: 8)
-                    Text(formatDuration(appState.recordingDuration))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            }
+            .disabled(!appState.isConfigured)
 
             Divider()
 
-            // current mode
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Mode:")
-                        .foregroundStyle(.secondary)
-                    Text(appState.currentMode.displayName)
-                    Spacer()
-                }
-                HStack {
-                    Text("App:")
-                        .foregroundStyle(.secondary)
+            // context info
+            VStack(alignment: .leading, spacing: FW.spacing4) {
+                HStack(spacing: FW.spacing4) {
+                    Text("App")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                        .frame(width: 40, alignment: .leading)
+
                     Text(appState.currentApp)
+                        .font(.caption)
+                        .foregroundStyle(FW.textSecondary)
                         .lineLimit(1)
-                    Spacer()
+                }
+
+                HStack(spacing: FW.spacing4) {
+                    Text("Mode")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                        .frame(width: 40, alignment: .leading)
+
+                    Text(appState.currentMode.displayName)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(FW.accent)
                 }
             }
-            .font(.caption)
-            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(FW.spacing16)
 
             Divider()
 
             // mode picker
-            Menu("Change Mode") {
+            Menu {
                 ForEach(WritingMode.allCases, id: \.self) { mode in
-                    Button(action: { appState.setMode(mode) }) {
+                    Button {
+                        appState.setMode(mode)
+                    } label: {
                         HStack {
                             Text(mode.displayName)
                             if mode == appState.currentMode {
@@ -93,44 +112,62 @@ struct MenuBarView: View {
                         }
                     }
                 }
+            } label: {
+                HStack {
+                    Text("Change Mode")
+                        .foregroundStyle(FW.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
+                .padding(.horizontal, FW.spacing16)
+                .padding(.vertical, FW.spacing8)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .buttonStyle(.plain)
 
             Divider()
 
             // actions
-            Button("Open FlowWhispr") {
-                NSApp.activate(ignoringOtherApps: true)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
-            .padding(.vertical, 4)
+            VStack(spacing: 0) {
+                menuButton("Open FlowWhispr", icon: "macwindow") {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
 
-            Button("Shortcuts...") {
-                openWindow(id: "shortcuts")
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
-            .padding(.vertical, 4)
+                menuButton("Shortcuts", icon: "text.badge.plus") {
+                    openWindow(id: "shortcuts")
+                }
 
-            Button("Settings...") {
-                openSettings()
+                menuButton("Settings", icon: "gear") {
+                    openSettings()
+                }
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
-            .padding(.vertical, 4)
 
             Divider()
 
-            Button("Quit") {
+            menuButton("Quit", icon: "power") {
                 NSApp.terminate(nil)
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
         }
-        .frame(width: 260)
+        .frame(width: 280)
+    }
+
+    private func menuButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundStyle(FW.textSecondary)
+                    .frame(width: 20)
+
+                Text(title)
+                    .foregroundStyle(FW.textPrimary)
+
+                Spacer()
+            }
+            .padding(.horizontal, FW.spacing16)
+            .padding(.vertical, FW.spacing8)
+        }
+        .buttonStyle(.plain)
     }
 
     private func formatDuration(_ ms: UInt64) -> String {

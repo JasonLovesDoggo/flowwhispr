@@ -19,7 +19,7 @@ struct SettingsView: View {
 
             APISettingsView()
                 .tabItem {
-                    Label("API Keys", systemImage: "key")
+                    Label("API", systemImage: "key")
                 }
 
             KeyboardSettingsView()
@@ -32,7 +32,7 @@ struct SettingsView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 480, height: 320)
+        .frame(width: 500, height: 360)
     }
 }
 
@@ -46,16 +46,15 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Startup") {
+            Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
-            }
-
-            Section("Feedback") {
                 Toggle("Play sounds", isOn: $playSounds)
+            } header: {
+                Label("Startup", systemImage: "power")
             }
 
-            Section("Default Writing Mode") {
-                Picker("Mode", selection: $defaultMode) {
+            Section {
+                Picker("Default mode", selection: $defaultMode) {
                     ForEach(WritingMode.allCases, id: \.rawValue) { mode in
                         Text(mode.displayName).tag(Int(mode.rawValue))
                     }
@@ -65,11 +64,14 @@ struct GeneralSettingsView: View {
                 if let mode = WritingMode(rawValue: UInt8(defaultMode)) {
                     Text(mode.description)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(FW.textSecondary)
                 }
+            } header: {
+                Label("Writing Mode", systemImage: "text.quote")
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .padding()
     }
 }
@@ -80,47 +82,92 @@ struct APISettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var openAIKey = ""
     @State private var anthropicKey = ""
-    @State private var selectedProvider = 0
+    @State private var showOpenAIKey = false
+    @State private var showAnthropicKey = false
 
     var body: some View {
         Form {
-            Section("Transcription (OpenAI Whisper)") {
-                SecureField("OpenAI API Key", text: $openAIKey)
+            Section {
+                HStack {
+                    Group {
+                        if showOpenAIKey {
+                            TextField("sk-...", text: $openAIKey)
+                        } else {
+                            SecureField("sk-...", text: $openAIKey)
+                        }
+                    }
                     .textFieldStyle(.roundedBorder)
+                    .font(FW.fontMonoSmall)
 
-                Button("Save") {
-                    appState.setApiKey(openAIKey)
-                }
-                .disabled(openAIKey.isEmpty)
-            }
-
-            Section("Completion Provider") {
-                Picker("Provider", selection: $selectedProvider) {
-                    Text("OpenAI GPT").tag(0)
-                    Text("Anthropic Claude").tag(1)
-                }
-                .pickerStyle(.segmented)
-
-                if selectedProvider == 1 {
-                    SecureField("Anthropic API Key", text: $anthropicKey)
-                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        showOpenAIKey.toggle()
+                    } label: {
+                        Image(systemName: showOpenAIKey ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
 
                     Button("Save") {
-                        appState.setAnthropicKey(anthropicKey)
+                        appState.setApiKey(openAIKey)
+                        openAIKey = ""
                     }
-                    .disabled(anthropicKey.isEmpty)
+                    .buttonStyle(FWSecondaryButtonStyle())
+                    .disabled(openAIKey.isEmpty)
                 }
+            } header: {
+                Label("OpenAI (Whisper)", systemImage: "waveform")
+            } footer: {
+                Text("Required for transcription")
+                    .font(.caption)
+                    .foregroundStyle(FW.textTertiary)
             }
 
             Section {
                 HStack {
-                    Image(systemName: appState.isConfigured ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(appState.isConfigured ? .green : .orange)
+                    Group {
+                        if showAnthropicKey {
+                            TextField("sk-ant-...", text: $anthropicKey)
+                        } else {
+                            SecureField("sk-ant-...", text: $anthropicKey)
+                        }
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .font(FW.fontMonoSmall)
+
+                    Button {
+                        showAnthropicKey.toggle()
+                    } label: {
+                        Image(systemName: showAnthropicKey ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+
+                    Button("Save") {
+                        appState.setAnthropicKey(anthropicKey)
+                        anthropicKey = ""
+                    }
+                    .buttonStyle(FWSecondaryButtonStyle())
+                    .disabled(anthropicKey.isEmpty)
+                }
+            } header: {
+                Label("Anthropic (Claude)", systemImage: "sparkles")
+            } footer: {
+                Text("Optional, for enhanced text processing")
+                    .font(.caption)
+                    .foregroundStyle(FW.textTertiary)
+            }
+
+            Section {
+                HStack(spacing: FW.spacing8) {
+                    Circle()
+                        .fill(appState.isConfigured ? FW.success : FW.warning)
+                        .frame(width: 10, height: 10)
+
                     Text(appState.isConfigured ? "API configured" : "API key required")
+                        .foregroundStyle(appState.isConfigured ? FW.success : FW.warning)
                 }
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .padding()
     }
 }
@@ -130,17 +177,18 @@ struct APISettingsView: View {
 struct KeyboardSettingsView: View {
     var body: some View {
         Form {
-            Section("Recording Shortcut") {
-                KeyboardShortcuts.Recorder("Toggle Recording", name: .toggleRecording)
-            }
-
             Section {
-                Text("Press the shortcut to start recording. Press again to stop and transcribe.")
+                KeyboardShortcuts.Recorder("Toggle recording", name: .toggleRecording)
+            } header: {
+                Label("Recording", systemImage: "mic")
+            } footer: {
+                Text("Press to start recording. Press again to stop and transcribe.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(FW.textTertiary)
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .padding()
     }
 }
@@ -149,36 +197,59 @@ struct KeyboardSettingsView: View {
 
 struct AboutView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.blue)
+        VStack(spacing: FW.spacing24) {
+            Spacer()
 
-            Text("FlowWhispr")
-                .font(.title)
-                .fontWeight(.semibold)
+            // logo
+            ZStack {
+                Circle()
+                    .fill(FW.accentGradient)
+                    .frame(width: 80, height: 80)
 
-            Text("Version 1.0.0")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Image(systemName: "waveform")
+                    .font(.system(size: 32, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(spacing: FW.spacing4) {
+                Text("FlowWhispr")
+                    .font(.title.weight(.semibold))
+
+                Text("v1.0.0")
+                    .font(FW.fontMonoSmall)
+                    .foregroundStyle(FW.textTertiary)
+            }
 
             Text("Voice dictation powered by AI")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(FW.textSecondary)
 
-            Divider()
-                .frame(width: 200)
+            Spacer()
 
-            HStack(spacing: 16) {
-                Link("Website", destination: URL(string: "https://flowwhispr.app")!)
-                Link("GitHub", destination: URL(string: "https://github.com/json/flowwhispr")!)
+            HStack(spacing: FW.spacing24) {
+                Link(destination: URL(string: "https://flowwhispr.app")!) {
+                    HStack(spacing: FW.spacing4) {
+                        Image(systemName: "globe")
+                        Text("Website")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(FW.accent)
+                }
+
+                Link(destination: URL(string: "https://github.com/json/flowwhispr")!) {
+                    HStack(spacing: FW.spacing4) {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        Text("GitHub")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(FW.accent)
+                }
             }
-            .font(.caption)
 
             Spacer()
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 }
 

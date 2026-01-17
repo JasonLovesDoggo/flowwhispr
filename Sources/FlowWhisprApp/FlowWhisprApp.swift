@@ -18,7 +18,7 @@ struct FlowWhisprApp: App {
                 .environmentObject(appState)
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 520, height: 440)
+        .defaultSize(width: 540, height: 520)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
