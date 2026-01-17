@@ -32,11 +32,50 @@ struct APISettingsSection: View {
     @EnvironmentObject var appState: AppState
     @State private var openAIKey = ""
     @State private var showOpenAIKey = false
+    @State private var geminiKey = ""
+    @State private var showGeminiKey = false
+    @State private var selectedProvider: CompletionProvider = .openAI
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing16) {
             Label("API Keys", systemImage: "key")
                 .font(.headline)
+
+            // Provider Selection
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("Active Provider")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(FW.textPrimary)
+
+                Picker("", selection: $selectedProvider) {
+                    ForEach([CompletionProvider.openAI, CompletionProvider.gemini], id: \.rawValue) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: selectedProvider) { _, newProvider in
+                    // Switch provider when selection changes
+                    let apiKey = newProvider == .openAI ? openAIKey : geminiKey
+                    if !apiKey.isEmpty {
+                        appState.setProvider(newProvider, apiKey: apiKey)
+                    }
+                }
+                .onAppear {
+                    // Load current provider
+                    if let current = appState.engine.completionProvider {
+                        selectedProvider = current
+                    }
+                }
+
+                if let current = appState.engine.completionProvider {
+                    Text("Currently using: \(current.displayName)")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
+            }
+
+            Divider()
 
             // OpenAI
             VStack(alignment: .leading, spacing: FW.spacing8) {
@@ -64,6 +103,9 @@ struct APISettingsSection: View {
 
                     Button("Save") {
                         appState.setApiKey(openAIKey)
+                        if selectedProvider == .openAI {
+                            appState.setProvider(.openAI, apiKey: openAIKey)
+                        }
                         openAIKey = ""
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
@@ -71,6 +113,46 @@ struct APISettingsSection: View {
                 }
 
                 Text("Required for transcription")
+                    .font(.caption)
+                    .foregroundStyle(FW.textTertiary)
+            }
+
+            // Gemini
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("Gemini")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(FW.textPrimary)
+
+                HStack {
+                    Group {
+                        if showGeminiKey {
+                            TextField("AI...", text: $geminiKey)
+                        } else {
+                            SecureField("AI...", text: $geminiKey)
+                        }
+                    }
+                    .textFieldStyle(.roundedBorder)
+                    .font(FW.fontMonoSmall)
+
+                    Button {
+                        showGeminiKey.toggle()
+                    } label: {
+                        Image(systemName: showGeminiKey ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+
+                    Button("Save") {
+                        appState.setGeminiApiKey(geminiKey)
+                        if selectedProvider == .gemini {
+                            appState.setProvider(.gemini, apiKey: geminiKey)
+                        }
+                        geminiKey = ""
+                    }
+                    .buttonStyle(FWSecondaryButtonStyle())
+                    .disabled(geminiKey.isEmpty)
+                }
+
+                Text("Alternative provider for transcription and completion")
                     .font(.caption)
                     .foregroundStyle(FW.textTertiary)
             }

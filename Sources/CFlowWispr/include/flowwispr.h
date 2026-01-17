@@ -142,6 +142,12 @@ bool flowwispr_is_configured(FlowWhisprHandle* handle);
 /// @return true on success
 bool flowwispr_set_api_key(FlowWhisprHandle* handle, const char* api_key);
 
+/// Set the Gemini API key
+/// @param handle Engine handle
+/// @param api_key Gemini API key
+/// @return true on success
+bool flowwispr_set_gemini_api_key(FlowWhisprHandle* handle, const char* api_key);
+
 // ============ App Tracking ============
 
 /// Set the currently active app
@@ -197,14 +203,14 @@ char* flowwispr_get_shortcuts_json(FlowWhisprHandle* handle);
 
 /// Set completion provider
 /// @param handle Engine handle
-/// @param provider 0 = OpenAI
+/// @param provider 0 = OpenAI, 1 = Gemini
 /// @param api_key API key for the provider
 /// @return true on success
 bool flowwispr_set_completion_provider(FlowWhisprHandle* handle, uint8_t provider, const char* api_key);
 
 /// Get current completion provider
 /// @param handle Engine handle
-/// @return 0 = OpenAI, 255 = Unknown
+/// @return 0 = OpenAI, 1 = Gemini, 255 = Unknown
 uint8_t flowwispr_get_completion_provider(FlowWhisprHandle* handle);
 
 // ============ Error Handling ============

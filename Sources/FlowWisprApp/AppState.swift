@@ -499,12 +499,39 @@ final class AppState: ObservableObject {
     func setApiKey(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         if engine.setApiKey(trimmed) {
+            // Also switch to OpenAI provider
+            _ = engine.setCompletionProvider(.openAI, apiKey: trimmed)
             isConfigured = engine.isConfigured
             errorMessage = nil
             Analytics.shared.track("API Key Set")
         } else {
             isConfigured = engine.isConfigured
             errorMessage = engine.lastError ?? "Failed to set API key"
+        }
+    }
+
+    func setGeminiApiKey(_ key: String) {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if engine.setGeminiApiKey(trimmed) {
+            // Also switch to Gemini provider
+            _ = engine.setCompletionProvider(.gemini, apiKey: trimmed)
+            isConfigured = engine.isConfigured
+            errorMessage = nil
+            Analytics.shared.track("Gemini API Key Set")
+        } else {
+            isConfigured = engine.isConfigured
+            errorMessage = engine.lastError ?? "Failed to set Gemini API key"
+        }
+    }
+
+    func setProvider(_ provider: CompletionProvider, apiKey: String) {
+        if engine.setCompletionProvider(provider, apiKey: apiKey) {
+            isConfigured = engine.isConfigured
+            errorMessage = nil
+            Analytics.shared.track("Provider Changed", eventProperties: ["provider": provider.displayName])
+        } else {
+            isConfigured = engine.isConfigured
+            errorMessage = engine.lastError ?? "Failed to set provider"
         }
     }
 

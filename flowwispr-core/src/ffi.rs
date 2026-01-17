@@ -22,11 +22,11 @@ use crate::audio::{AudioCapture, CaptureState};
 use crate::learning::LearningEngine;
 use crate::modes::{StyleLearner, WritingMode, WritingModeEngine};
 use crate::providers::{
-    CompletionProvider, CompletionRequest, OpenAICompletionProvider, OpenAITranscriptionProvider,
-    TranscriptionProvider, TranscriptionRequest,
+    CompletionProvider, CompletionRequest, GeminiCompletionProvider, GeminiTranscriptionProvider,
+    OpenAICompletionProvider, OpenAITranscriptionProvider, TranscriptionProvider, TranscriptionRequest,
 };
 use crate::shortcuts::ShortcutsEngine;
-use crate::storage::{SETTING_COMPLETION_PROVIDER, SETTING_OPENAI_API_KEY, Storage};
+use crate::storage::{SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY, SETTING_OPENAI_API_KEY, Storage};
 use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
 
 /// Opaque handle to the FlowWhispr engine
@@ -724,6 +724,56 @@ pub extern "C" fn flowwispr_set_api_key(
     true
 }
 
+/// Set the Gemini API key
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_set_gemini_api_key(
+    handle: *mut FlowWhisprHandle,
+    api_key: *const c_char,
+) -> bool {
+    if api_key.is_null() {
+        return false;
+    }
+
+    let handle = unsafe { &mut *handle };
+
+    let key = match unsafe { CStr::from_ptr(api_key) }.to_str() {
+        Ok(s) => s.trim().to_string(),
+        Err(_) => {
+            set_last_error(handle, "Invalid API key");
+            return false;
+        }
+    };
+
+    if key.is_empty() {
+        set_last_error(handle, "API key is empty");
+        return false;
+    }
+
+    if let Err(e) = handle.storage.set_setting(SETTING_GEMINI_API_KEY, &key) {
+        let message = format!("Failed to save Gemini API key: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
+    if let Err(e) = handle
+        .storage
+        .set_setting(SETTING_COMPLETION_PROVIDER, "gemini")
+    {
+        let message = format!("Failed to save completion provider: {e}");
+        error!("{message}");
+        set_last_error(handle, message);
+        return false;
+    }
+
+    // reinitialize providers with new key
+    handle.transcription = Arc::new(GeminiTranscriptionProvider::new(Some(key.clone())));
+    handle.completion = Arc::new(GeminiCompletionProvider::new(Some(key)));
+
+    clear_last_error(handle);
+    true
+}
+
 // ============ App Tracking ============
 
 /// Set the currently active app (call from Swift when app switches)
@@ -979,6 +1029,25 @@ pub extern "C" fn flowwispr_set_completion_provider(
             handle.completion = Arc::new(OpenAICompletionProvider::new(Some(key)));
             debug!("Set completion provider to OpenAI");
         }
+        1 => {
+            if let Err(e) = handle.storage.set_setting(SETTING_GEMINI_API_KEY, &key) {
+                let message = format!("Failed to save Gemini API key: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return false;
+            }
+            if let Err(e) = handle
+                .storage
+                .set_setting(SETTING_COMPLETION_PROVIDER, "gemini")
+            {
+                let message = format!("Failed to save completion provider: {e}");
+                error!("{message}");
+                set_last_error(handle, message);
+                return false;
+            }
+            handle.completion = Arc::new(GeminiCompletionProvider::new(Some(key)));
+            debug!("Set completion provider to Gemini");
+        }
         _ => return false,
     }
 
@@ -993,6 +1062,7 @@ pub extern "C" fn flowwispr_get_completion_provider(handle: *mut FlowWhisprHandl
 
     match handle.completion.name() {
         "OpenAI GPT" => 0,
+        "Gemini" => 1,
         _ => 255,
     }
 }
