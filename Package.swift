@@ -7,6 +7,22 @@ import PackageDescription
 let packageRoot = URL(fileURLWithPath: #file).deletingLastPathComponent().path
 let debugLibPath = "\(packageRoot)/flowwispr-core/target/debug/libflowwispr_core.a"
 let releaseLibPath = "\(packageRoot)/flowwispr-core/target/release/libflowwispr_core.a"
+let buildConfiguration = (ProcessInfo.processInfo.environment["SWIFT_BUILD_CONFIGURATION"]
+    ?? ProcessInfo.processInfo.environment["CONFIGURATION"])?.lowercased()
+let preferRelease = buildConfiguration == "release"
+let rustLibPath: String = {
+    let fileManager = FileManager.default
+    if preferRelease {
+        if fileManager.fileExists(atPath: releaseLibPath) {
+            return releaseLibPath
+        }
+        return debugLibPath
+    }
+    if fileManager.fileExists(atPath: debugLibPath) {
+        return debugLibPath
+    }
+    return releaseLibPath
+}()
 
 let package = Package(
     name: "FlowWispr",
@@ -34,8 +50,7 @@ let package = Package(
             publicHeadersPath: "include",
             linkerSettings: [
                 // Link to the Rust static library
-                .unsafeFlags([debugLibPath], .when(configuration: .debug)),
-                .unsafeFlags([releaseLibPath], .when(configuration: .release)),
+                .unsafeFlags([rustLibPath]),
                 // System frameworks needed by the Rust library
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
