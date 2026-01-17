@@ -104,8 +104,8 @@ final class AppState: ObservableObject {
     // MARK: - Globe Key
 
     private func setupGlobeKey() {
-        globeKeyHandler = GlobeKeyHandler(hotkey: hotkey) { [weak self] trigger in
-            Task { @MainActor in
+        globeKeyHandler = GlobeKeyHandler(hotkey: hotkey) { trigger in
+            Task { @MainActor [weak self] in
                 self?.handleHotkeyTrigger(trigger)
             }
         }
@@ -131,8 +131,8 @@ final class AppState: ObservableObject {
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        ) { _ in
+            Task { @MainActor [weak self] in
                 self?.refreshAccessibilityStatus()
             }
         }
@@ -141,8 +141,8 @@ final class AppState: ObservableObject {
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
+        ) { _ in
+            Task { @MainActor [weak self] in
                 self?.updateRecordingIndicatorVisibility()
             }
         }
@@ -220,8 +220,8 @@ final class AppState: ObservableObject {
         guard hotkeyCaptureMonitor == nil else { return }
         isCapturingHotkey = true
 
-        hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            Task { @MainActor in
+        hotkeyCaptureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            Task { @MainActor [weak self] in
                 self?.handleHotkeyCapture(event)
             }
             return nil
@@ -254,14 +254,14 @@ final class AppState: ObservableObject {
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
-        ) { [weak self] notification in
+        ) { notification in
             guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
                 return
             }
             let appName = app.localizedName ?? "Unknown"
             let bundleId = app.bundleIdentifier
 
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleAppActivation(appName: appName, bundleId: bundleId)
             }
         }
@@ -321,11 +321,10 @@ final class AppState: ObservableObject {
                 "writing_mode": currentMode.rawValue
             ])
 
-            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                Task { @MainActor in
-                    if let self = self, self.isRecording {
-                        self.recordingDuration += 100
-                    }
+            recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.isRecording else { return }
+                    self.recordingDuration += 100
                 }
             }
         } else {
