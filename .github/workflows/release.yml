@@ -149,8 +149,7 @@ jobs:
             --identifier "${BUNDLE_ID}" \
             --version "${VERSION}" \
             --install-location "/Applications" \
-            --root "./${APP_NAME}.app" \
-            --component-plist /dev/null \
+            --component "./${APP_NAME}.app" \
             "Flow-component.pkg"
 
           # Create distribution package
