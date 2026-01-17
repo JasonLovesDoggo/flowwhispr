@@ -18,6 +18,9 @@ let package = Package(
             targets: ["FlowWisprApp"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/amplitude/Amplitude-iOS", from: "8.0.0")
+    ],
     targets: [
         // C wrapper for the Rust FFI
         .target(
@@ -48,6 +51,7 @@ let package = Package(
             name: "FlowWisprApp",
             dependencies: [
                 "FlowWispr",
+                .product(name: "Amplitude", package: "Amplitude-iOS"),
             ],
             path: "Sources/FlowWisprApp",
             resources: [

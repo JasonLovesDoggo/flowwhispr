@@ -70,6 +70,11 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 280)
+            .onChange(of: appState.selectedTab) { _, newTab in
+                Analytics.shared.track("Tab Changed", eventProperties: [
+                    "tab": newTab.rawValue
+                ])
+            }
 
             Spacer()
 

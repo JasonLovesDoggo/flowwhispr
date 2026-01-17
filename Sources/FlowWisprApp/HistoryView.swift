@@ -44,6 +44,9 @@ struct HistoryListView: View {
         }
         .onAppear {
             appState.refreshHistory()
+            Analytics.shared.track("History Viewed", eventProperties: [
+                "history_count": appState.history.count
+            ])
         }
     }
 
@@ -96,6 +99,9 @@ struct HistoryListView: View {
                     Button {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(item.text, forType: .string)
+                        Analytics.shared.track("History Item Copied", eventProperties: [
+                            "text_length": item.text.count
+                        ])
                     } label: {
                         Image(systemName: "doc.on.doc")
                             .font(.caption)
