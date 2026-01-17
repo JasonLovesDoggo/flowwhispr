@@ -2,83 +2,32 @@
 // SettingsView.swift
 // FlowWhispr
 //
-// Settings window.
+// Settings content view with sections for API, general settings, and about.
 //
 
 import FlowWhispr
-import KeyboardShortcuts
 import SwiftUI
 
-struct SettingsView: View {
+struct SettingsContentView: View {
     var body: some View {
-        TabView {
-            GeneralSettingsView()
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
-
-            APISettingsView()
-                .tabItem {
-                    Label("API", systemImage: "key")
-                }
-
-            KeyboardSettingsView()
-                .tabItem {
-                    Label("Keyboard", systemImage: "keyboard")
-                }
-
-            AboutView()
-                .tabItem {
-                    Label("About", systemImage: "info.circle")
-                }
-        }
-        .frame(width: 500, height: 360)
-    }
-}
-
-// MARK: - General Settings
-
-struct GeneralSettingsView: View {
-    @EnvironmentObject var appState: AppState
-    @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("playSounds") private var playSounds = true
-    @AppStorage("defaultMode") private var defaultMode = 1
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                Toggle("Play sounds", isOn: $playSounds)
-            } header: {
-                Label("Startup", systemImage: "power")
+        ScrollView {
+            VStack(spacing: FW.spacing24) {
+                APISettingsSection()
+                Divider()
+                GeneralSettingsSection()
+                Divider()
+                InputMonitoringSection()
+                Divider()
+                AboutSection()
             }
-
-            Section {
-                Picker("Default mode", selection: $defaultMode) {
-                    ForEach(WritingMode.allCases, id: \.rawValue) { mode in
-                        Text(mode.displayName).tag(Int(mode.rawValue))
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                if let mode = WritingMode(rawValue: UInt8(defaultMode)) {
-                    Text(mode.description)
-                        .font(.caption)
-                        .foregroundStyle(FW.textSecondary)
-                }
-            } header: {
-                Label("Writing Mode", systemImage: "text.quote")
-            }
+            .padding(FW.spacing24)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .padding()
     }
 }
 
 // MARK: - API Settings
 
-struct APISettingsView: View {
+struct APISettingsSection: View {
     @EnvironmentObject var appState: AppState
     @State private var openAIKey = ""
     @State private var anthropicKey = ""
@@ -86,8 +35,16 @@ struct APISettingsView: View {
     @State private var showAnthropicKey = false
 
     var body: some View {
-        Form {
-            Section {
+        VStack(alignment: .leading, spacing: FW.spacing16) {
+            Label("API Keys", systemImage: "key")
+                .font(.headline)
+
+            // OpenAI
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("OpenAI (Whisper)")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(FW.textPrimary)
+
                 HStack {
                     Group {
                         if showOpenAIKey {
@@ -113,15 +70,18 @@ struct APISettingsView: View {
                     .buttonStyle(FWSecondaryButtonStyle())
                     .disabled(openAIKey.isEmpty)
                 }
-            } header: {
-                Label("OpenAI (Whisper)", systemImage: "waveform")
-            } footer: {
+
                 Text("Required for transcription")
                     .font(.caption)
                     .foregroundStyle(FW.textTertiary)
             }
 
-            Section {
+            // Anthropic
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("Anthropic (Claude)")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(FW.textPrimary)
+
                 HStack {
                     Group {
                         if showAnthropicKey {
@@ -147,73 +107,117 @@ struct APISettingsView: View {
                     .buttonStyle(FWSecondaryButtonStyle())
                     .disabled(anthropicKey.isEmpty)
                 }
-            } header: {
-                Label("Anthropic (Claude)", systemImage: "sparkles")
-            } footer: {
+
                 Text("Optional, for enhanced text processing")
                     .font(.caption)
                     .foregroundStyle(FW.textTertiary)
             }
 
-            Section {
-                HStack(spacing: FW.spacing8) {
-                    Circle()
-                        .fill(appState.isConfigured ? FW.success : FW.warning)
-                        .frame(width: 10, height: 10)
+            // Status
+            HStack(spacing: FW.spacing8) {
+                Circle()
+                    .fill(appState.isConfigured ? FW.success : FW.warning)
+                    .frame(width: 10, height: 10)
 
-                    Text(appState.isConfigured ? "API configured" : "API key required")
-                        .foregroundStyle(appState.isConfigured ? FW.success : FW.warning)
-                }
+                Text(appState.isConfigured ? "API configured" : "API key required")
+                    .foregroundStyle(appState.isConfigured ? FW.success : FW.warning)
             }
+            .padding(.top, FW.spacing8)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .padding()
     }
 }
 
-// MARK: - Keyboard Settings
+// MARK: - General Settings
 
-struct KeyboardSettingsView: View {
+struct GeneralSettingsSection: View {
+    @EnvironmentObject var appState: AppState
+    @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @AppStorage("playSounds") private var playSounds = true
+    @AppStorage("defaultMode") private var defaultMode = 1
+
     var body: some View {
-        Form {
-            Section {
-                KeyboardShortcuts.Recorder("Toggle recording", name: .toggleRecording)
-            } header: {
-                Label("Recording", systemImage: "mic")
-            } footer: {
-                Text("Press to start recording. Press again to stop and transcribe.")
-                    .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
+        VStack(alignment: .leading, spacing: FW.spacing16) {
+            Label("General", systemImage: "gear")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: FW.spacing12) {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                Toggle("Play sounds", isOn: $playSounds)
+            }
+
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("Default writing mode")
+                    .font(.subheadline.weight(.medium))
+
+                Picker("", selection: $defaultMode) {
+                    ForEach(WritingMode.allCases, id: \.rawValue) { mode in
+                        Text(mode.displayName).tag(Int(mode.rawValue))
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                if let mode = WritingMode(rawValue: UInt8(defaultMode)) {
+                    Text(mode.description)
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .padding()
+    }
+}
+
+// MARK: - Input Monitoring
+
+struct InputMonitoringSection: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: FW.spacing16) {
+            Label("Keyboard", systemImage: "keyboard")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                HStack(spacing: FW.spacing8) {
+                    Text("🌐")
+                        .font(.title2)
+                    Text("Globe key toggles recording")
+                        .font(.subheadline.weight(.medium))
+                }
+
+                Text("Press the globe key (🌐) on your keyboard to start/stop recording. This requires Input Monitoring permission.")
+                    .font(.caption)
+                    .foregroundStyle(FW.textSecondary)
+
+                Button("Open Privacy Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(FWSecondaryButtonStyle())
+                .padding(.top, FW.spacing4)
+            }
+        }
     }
 }
 
 // MARK: - About
 
-struct AboutView: View {
+struct AboutSection: View {
     var body: some View {
-        VStack(spacing: FW.spacing24) {
-            Spacer()
-
+        VStack(spacing: FW.spacing16) {
             // logo
             ZStack {
                 Circle()
                     .fill(FW.accentGradient)
-                    .frame(width: 80, height: 80)
+                    .frame(width: 60, height: 60)
 
                 Image(systemName: "waveform")
-                    .font(.system(size: 32, weight: .medium))
+                    .font(.system(size: 24, weight: .medium))
                     .foregroundStyle(.white)
             }
 
             VStack(spacing: FW.spacing4) {
                 Text("FlowWhispr")
-                    .font(.title.weight(.semibold))
+                    .font(.title3.weight(.semibold))
 
                 Text("v1.0.0")
                     .font(FW.fontMonoSmall)
@@ -223,8 +227,6 @@ struct AboutView: View {
             Text("Voice dictation powered by AI")
                 .font(.subheadline)
                 .foregroundStyle(FW.textSecondary)
-
-            Spacer()
 
             HStack(spacing: FW.spacing24) {
                 Link(destination: URL(string: "https://flowwhispr.app")!) {
@@ -245,15 +247,13 @@ struct AboutView: View {
                     .foregroundStyle(FW.accent)
                 }
             }
-
-            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, FW.spacing16)
     }
 }
 
 #Preview {
-    SettingsView()
+    SettingsContentView()
         .environmentObject(AppState())
 }

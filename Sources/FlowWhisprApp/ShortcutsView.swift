@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct ShortcutsView: View {
+struct ShortcutsContentView: View {
     @EnvironmentObject var appState: AppState
     @State private var newTrigger = ""
     @State private var newReplacement = ""
@@ -19,7 +19,7 @@ struct ShortcutsView: View {
             // header
             HStack {
                 VStack(alignment: .leading, spacing: FW.spacing2) {
-                    Text("Shortcuts")
+                    Text("Voice Shortcuts")
                         .font(.title3.weight(.semibold))
 
                     Text("Expand phrases while dictating")
@@ -39,7 +39,7 @@ struct ShortcutsView: View {
                 }
                 .buttonStyle(FWSecondaryButtonStyle())
             }
-            .padding(FW.spacing16)
+            .padding(FW.spacing24)
 
             Divider()
 
@@ -53,11 +53,10 @@ struct ShortcutsView: View {
                             shortcutRow(shortcut)
                         }
                     }
-                    .padding(FW.spacing16)
+                    .padding(FW.spacing24)
                 }
             }
         }
-        .frame(width: 480, height: 400)
         .sheet(isPresented: $showingAddSheet) {
             AddShortcutSheet(
                 trigger: $newTrigger,
@@ -239,6 +238,6 @@ struct AddShortcutSheet: View {
 }
 
 #Preview {
-    ShortcutsView()
+    ShortcutsContentView()
         .environmentObject(AppState())
 }

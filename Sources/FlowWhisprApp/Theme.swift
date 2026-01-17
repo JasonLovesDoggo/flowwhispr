@@ -5,7 +5,20 @@
 // Design system. Indigo-forward, clean, with subtle depth.
 //
 
+import AppKit
 import SwiftUI
+
+// MARK: - Window Size
+
+enum WindowSize {
+    static var screen: CGRect { NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900) }
+    static var width: CGFloat { screen.width * 0.7 }
+    static var height: CGFloat { screen.height * 0.7 }
+    static let minWidth: CGFloat = 700
+    static let minHeight: CGFloat = 500
+}
+
+// MARK: - Design System
 
 enum FW {
     // MARK: - Colors
