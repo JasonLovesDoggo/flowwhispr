@@ -380,7 +380,24 @@ public final class FlowWispr: @unchecked Sendable {
 
         guard let data = jsonString.data(using: .utf8) else { return [] }
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standardFormatter = ISO8601DateFormatter()
+        standardFormatter.formatOptions = [.withInternetDateTime]
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateString = try container.decode(String.self)
+            if let date = fractionalFormatter.date(from: dateString) {
+                return date
+            }
+            if let date = standardFormatter.date(from: dateString) {
+                return date
+            }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Invalid date: \(dateString)"
+            )
+        }
         return (try? decoder.decode([TranscriptionSummary].self, from: data)) ?? []
     }
 
