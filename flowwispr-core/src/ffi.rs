@@ -22,13 +22,11 @@ use crate::audio::{AudioCapture, CaptureState};
 use crate::learning::LearningEngine;
 use crate::modes::{StyleLearner, WritingMode, WritingModeEngine};
 use crate::providers::{
-    CompletionProvider, CompletionRequest, OpenAICompletionProvider,
-    OpenAITranscriptionProvider, TranscriptionProvider, TranscriptionRequest,
+    CompletionProvider, CompletionRequest, OpenAICompletionProvider, OpenAITranscriptionProvider,
+    TranscriptionProvider, TranscriptionRequest,
 };
 use crate::shortcuts::ShortcutsEngine;
-use crate::storage::{
-    SETTING_COMPLETION_PROVIDER, SETTING_OPENAI_API_KEY, Storage,
-};
+use crate::storage::{SETTING_COMPLETION_PROVIDER, SETTING_OPENAI_API_KEY, Storage};
 use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
 
 /// Opaque handle to the FlowWhispr engine
@@ -313,8 +311,11 @@ fn transcribe_with_audio(
         error!("Failed to save transcription: {}", e);
     }
 
-    let mut history =
-        TranscriptionHistoryEntry::success(record.raw_text.clone(), processed_text.clone(), record.duration_ms);
+    let mut history = TranscriptionHistoryEntry::success(
+        record.raw_text.clone(),
+        processed_text.clone(),
+        record.duration_ms,
+    );
     history.app_context = record.app_context.clone();
     if let Err(e) = handle.storage.save_history_entry(&history) {
         error!("Failed to save transcription history: {}", e);

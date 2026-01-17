@@ -62,12 +62,10 @@ public enum AppCategory: UInt8, Sendable {
 /// Completion provider options
 public enum CompletionProvider: UInt8, Sendable {
     case openAI = 0
-    case anthropic = 1
 
     public var displayName: String {
         switch self {
         case .openAI: return "OpenAI GPT"
-        case .anthropic: return "Anthropic Claude"
         }
     }
 }
@@ -425,19 +423,6 @@ public final class FlowWispr: @unchecked Sendable {
     }
 
     // MARK: - Provider Configuration
-
-    /// Set the Anthropic API key and switch to Anthropic
-    /// - Parameter apiKey: The Anthropic API key
-    /// - Returns: true on success
-    public func setAnthropicKey(_ apiKey: String) -> Bool {
-        guard let handle = handle else { return false }
-        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isSet = trimmedKey.withCString { cKey in
-            flowwispr_set_anthropic_key(handle, cKey)
-        }
-
-        return isSet
-    }
 
     /// Set the completion provider
     /// - Parameters:

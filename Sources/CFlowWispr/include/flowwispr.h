@@ -195,22 +195,16 @@ char* flowwispr_get_shortcuts_json(FlowWhisprHandle* handle);
 
 // ============ Provider Configuration ============
 
-/// Set Anthropic API key and switch to Anthropic
-/// @param handle Engine handle
-/// @param api_key Anthropic API key
-/// @return true on success
-bool flowwispr_set_anthropic_key(FlowWhisprHandle* handle, const char* api_key);
-
 /// Set completion provider
 /// @param handle Engine handle
-/// @param provider 0 = OpenAI, 1 = Anthropic
+/// @param provider 0 = OpenAI
 /// @param api_key API key for the provider
 /// @return true on success
 bool flowwispr_set_completion_provider(FlowWhisprHandle* handle, uint8_t provider, const char* api_key);
 
 /// Get current completion provider
 /// @param handle Engine handle
-/// @return 0 = OpenAI, 1 = Anthropic, 255 = Unknown
+/// @return 0 = OpenAI, 255 = Unknown
 uint8_t flowwispr_get_completion_provider(FlowWhisprHandle* handle);
 
 // ============ Error Handling ============
