@@ -263,15 +263,26 @@ fn transcribe_with_audio(
     let (text_with_shortcuts, _triggered) = handle.shortcuts.process(&transcription.text);
     let (text_with_corrections, _applied) = handle.learning.apply_corrections(&text_with_shortcuts);
 
-    let completion = handle.runtime.block_on(async {
-        let completion_request = CompletionRequest::new(text_with_corrections, mode)
-            .with_app_context(app_name.unwrap_or_default());
+    let completion_result = handle.runtime.block_on(async {
+        let completion_request = if let Some(name) = app_name.clone() {
+            CompletionRequest::new(text_with_corrections.clone(), mode).with_app_context(name)
+        } else {
+            CompletionRequest::new(text_with_corrections.clone(), mode)
+        };
         completion_provider.complete(completion_request).await
-    })?;
+    });
+
+    let processed_text = match completion_result {
+        Ok(completion) => completion.text,
+        Err(err) => {
+            error!("Completion failed, using corrected text: {}", err);
+            text_with_corrections.clone()
+        }
+    };
 
     let mut record = Transcription::new(
         transcription.text,
-        completion.text.clone(),
+        processed_text.clone(),
         transcription.confidence.unwrap_or(0.0),
         transcription.duration_ms,
     );
@@ -283,13 +294,13 @@ fn transcribe_with_audio(
     }
 
     let mut history =
-        TranscriptionHistoryEntry::success(completion.text.clone(), record.duration_ms);
+        TranscriptionHistoryEntry::success(processed_text.clone(), record.duration_ms);
     history.app_context = record.app_context.clone();
     if let Err(e) = handle.storage.save_history_entry(&history) {
         error!("Failed to save transcription history: {}", e);
     }
 
-    Ok(completion.text)
+    Ok(processed_text)
 }
 
 /// Transcribe the recorded audio and process it
