@@ -429,6 +429,7 @@ impl WhisperEngine {
         Ok(text.trim().to_string())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn decode_audio_normal(
         model: &mut m::model::Whisper,
         mel: &Tensor,
@@ -513,6 +514,7 @@ impl WhisperEngine {
         Ok(segments)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn decode_audio_quantized(
         model: &mut m::quantized_model::Whisper,
         mel: &Tensor,

@@ -85,6 +85,7 @@ struct HistoryListView: View {
                     Text(item.text)
                         .font(.subheadline)
                         .foregroundStyle(FW.textPrimary)
+                        .help(item.rawText.isEmpty ? item.text : "Raw: \(item.rawText)")
                 } else {
                     Text(item.error ?? "Transcription failed")
                         .font(.subheadline)

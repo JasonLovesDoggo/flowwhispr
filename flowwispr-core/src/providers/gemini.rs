@@ -111,15 +111,15 @@ enum GeminiPartResponse {
     },
     InlineData {
         #[serde(rename = "inlineData")]
-        inline_data: GeminiInlineDataResponse,
+        _inline_data: GeminiInlineDataResponse,
     },
 }
 
 #[derive(Debug, Deserialize)]
 struct GeminiInlineDataResponse {
     #[serde(rename = "mimeType")]
-    mime_type: String,
-    data: String,
+    _mime_type: String,
+    _data: String,
 }
 
 #[async_trait]
