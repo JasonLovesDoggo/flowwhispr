@@ -219,6 +219,19 @@ bool flowwispr_set_completion_provider(FlowWhisprHandle* handle, uint8_t provide
 /// @return 0 = OpenAI, 1 = Gemini, 2 = OpenRouter, 255 = Unknown
 uint8_t flowwispr_get_completion_provider(FlowWhisprHandle* handle);
 
+/// Set transcription mode (local or remote)
+/// @param handle Engine handle
+/// @param use_local true for local Whisper, false for cloud provider
+/// @param whisper_model Whisper model: 0 = Tiny (39MB), 1 = Base (142MB), 2 = Small (466MB)
+/// @return true on success, false on failure
+bool flowwispr_set_transcription_mode(FlowWhisprHandle* handle, bool use_local, uint8_t whisper_model);
+
+/// Legacy: Enable local Whisper transcription with Metal acceleration
+/// @param handle Engine handle
+/// @param model Whisper model: 0 = Tiny (39MB), 1 = Base (142MB), 2 = Small (466MB)
+/// @return true on success, false on failure
+bool flowwispr_enable_local_whisper(FlowWhisprHandle* handle, uint8_t model);
+
 // ============ Error Handling ============
 
 /// Get the last error message
