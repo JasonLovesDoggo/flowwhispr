@@ -37,6 +37,8 @@ struct APISettingsSection: View {
     @State private var openRouterKey = ""
     @State private var showOpenRouterKey = false
     @State private var selectedProvider: CompletionProvider = .openAI
+    @State private var useLocalTranscription = false
+    @State private var selectedWhisperModel: WhisperModel = .base
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing16) {
@@ -199,6 +201,57 @@ struct APISettingsSection: View {
                 Text("Access multiple LLM providers (Llama, Claude, GPT, etc.)")
                     .font(.caption)
                     .foregroundStyle(FW.textTertiary)
+            }
+
+            Divider()
+
+            // Transcription Mode
+            VStack(alignment: .leading, spacing: FW.spacing8) {
+                Text("Transcription")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(FW.textPrimary)
+
+                Toggle("Use local Whisper (privacy, no API costs)", isOn: $useLocalTranscription)
+                    .onChange(of: useLocalTranscription) { _, newValue in
+                        if newValue {
+                            _ = appState.engine.setTranscriptionMode(.local(model: selectedWhisperModel))
+                        } else {
+                            _ = appState.engine.setTranscriptionMode(.remote)
+                        }
+                    }
+
+                if useLocalTranscription {
+                    VStack(alignment: .leading, spacing: FW.spacing8) {
+                        Text("Model Size")
+                            .font(.caption)
+                            .foregroundStyle(FW.textSecondary)
+
+                        Picker("", selection: $selectedWhisperModel) {
+                            ForEach([WhisperModel.tiny, WhisperModel.base, WhisperModel.small], id: \.rawValue) { model in
+                                VStack(alignment: .leading) {
+                                    Text(model.displayName)
+                                    Text(model.sizeDescription)
+                                        .font(.caption2)
+                                        .foregroundStyle(FW.textTertiary)
+                                }
+                                .tag(model)
+                            }
+                        }
+                        .pickerStyle(.radioGroup)
+                        .onChange(of: selectedWhisperModel) { _, newModel in
+                            _ = appState.engine.setTranscriptionMode(.local(model: newModel))
+                        }
+
+                        Text("Model will download automatically on first use")
+                            .font(.caption2)
+                            .foregroundStyle(FW.textTertiary)
+                    }
+                    .padding(.leading, 20)
+                } else {
+                    Text("Using cloud provider (\(selectedProvider.displayName))")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
             }
 
             // Status
