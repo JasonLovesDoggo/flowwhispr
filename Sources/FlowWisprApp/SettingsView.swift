@@ -39,6 +39,9 @@ struct APISettingsSection: View {
     @State private var selectedProvider: CompletionProvider = .openAI
     @State private var useLocalTranscription = false
     @State private var selectedWhisperModel: WhisperModel = .quality
+    @State private var existingOpenAIKey: String?
+    @State private var existingGeminiKey: String?
+    @State private var existingOpenRouterKey: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: FW.spacing16) {
@@ -115,14 +118,23 @@ struct APISettingsSection: View {
                         if selectedProvider == .openAI {
                             appState.setProvider(.openAI, apiKey: openAIKey)
                         }
+                        // Refresh the masked key display
+                        existingOpenAIKey = appState.engine.maskedOpenAIKey
+                        openAIKey = ""
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
                     .disabled(openAIKey.isEmpty)
                 }
 
-                Text("Required for transcription")
-                    .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
+                if let existing = existingOpenAIKey {
+                    Text("Currently configured: \(existing)")
+                        .font(.caption)
+                        .foregroundStyle(FW.success)
+                } else {
+                    Text("Required for transcription")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
             }
 
             // Gemini
@@ -154,14 +166,23 @@ struct APISettingsSection: View {
                         if selectedProvider == .gemini {
                             appState.setProvider(.gemini, apiKey: geminiKey)
                         }
+                        // Refresh the masked key display
+                        existingGeminiKey = appState.engine.maskedGeminiKey
+                        geminiKey = ""
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
                     .disabled(geminiKey.isEmpty)
                 }
 
-                Text("Alternative provider for transcription and completion")
-                    .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
+                if let existing = existingGeminiKey {
+                    Text("Currently configured: \(existing)")
+                        .font(.caption)
+                        .foregroundStyle(FW.success)
+                } else {
+                    Text("Alternative provider for transcription and completion")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
             }
 
             // OpenRouter
@@ -193,14 +214,23 @@ struct APISettingsSection: View {
                         if selectedProvider == .openRouter {
                             appState.setProvider(.openRouter, apiKey: openRouterKey)
                         }
+                        // Refresh the masked key display
+                        existingOpenRouterKey = appState.engine.maskedOpenRouterKey
+                        openRouterKey = ""
                     }
                     .buttonStyle(FWSecondaryButtonStyle())
                     .disabled(openRouterKey.isEmpty)
                 }
 
-                Text("Access multiple LLM providers (Llama, Claude, GPT, etc.)")
-                    .font(.caption)
-                    .foregroundStyle(FW.textTertiary)
+                if let existing = existingOpenRouterKey {
+                    Text("Currently configured: \(existing)")
+                        .font(.caption)
+                        .foregroundStyle(FW.success)
+                } else {
+                    Text("Access multiple LLM providers (Llama, Claude, GPT, etc.)")
+                        .font(.caption)
+                        .foregroundStyle(FW.textTertiary)
+                }
             }
 
             Divider()
@@ -279,6 +309,16 @@ struct APISettingsSection: View {
             .padding(.top, FW.spacing8)
         }
         .onAppear {
+            // Load current provider
+            if let current = appState.engine.completionProvider {
+                selectedProvider = current
+            }
+
+            // Load masked API keys to show they're configured
+            existingOpenAIKey = appState.engine.maskedOpenAIKey
+            existingGeminiKey = appState.engine.maskedGeminiKey
+            existingOpenRouterKey = appState.engine.maskedOpenRouterKey
+
             // Load transcription mode settings from database
             if let mode = appState.engine.getTranscriptionMode() {
                 switch mode {

@@ -98,16 +98,34 @@ fn estimate_duration_ms(bytes: usize, sample_rate: u32) -> u64 {
 }
 
 fn load_persisted_configuration(handle: &mut FlowWhisprHandle) {
-    let openai_key = match handle.storage.get_setting(SETTING_OPENAI_API_KEY) {
-        Ok(value) => value,
-        Err(e) => {
-            error!("Failed to load OpenAI key: {}", e);
-            None
-        }
-    };
+    // Load all API keys
+    let openai_key = handle.storage.get_setting(SETTING_OPENAI_API_KEY).ok().flatten();
+    let gemini_key = handle.storage.get_setting(SETTING_GEMINI_API_KEY).ok().flatten();
+    let openrouter_key = handle.storage.get_setting(SETTING_OPENROUTER_API_KEY).ok().flatten();
 
-    handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key.clone()));
-    handle.completion = Arc::new(OpenAICompletionProvider::new(openai_key));
+    // Load saved provider preference
+    let saved_provider = handle.storage.get_setting(SETTING_COMPLETION_PROVIDER).ok().flatten();
+
+    // Initialize providers based on saved preference
+    match saved_provider.as_deref() {
+        Some("gemini") => {
+            debug!("Restoring Gemini provider from database");
+            handle.transcription = Arc::new(GeminiTranscriptionProvider::new(gemini_key.clone()));
+            handle.completion = Arc::new(GeminiCompletionProvider::new(gemini_key));
+        }
+        Some("openrouter") => {
+            debug!("Restoring OpenRouter provider from database");
+            // OpenRouter doesn't do transcription, use OpenAI for that
+            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key));
+            handle.completion = Arc::new(OpenRouterCompletionProvider::new(openrouter_key));
+        }
+        _ => {
+            // Default to OpenAI or if "openai" was explicitly saved
+            debug!("Restoring OpenAI provider from database");
+            handle.transcription = Arc::new(OpenAITranscriptionProvider::new(openai_key.clone()));
+            handle.completion = Arc::new(OpenAICompletionProvider::new(openai_key));
+        }
+    }
 }
 
 // ============ Lifecycle ============
@@ -1247,6 +1265,49 @@ pub extern "C" fn flowwispr_get_completion_provider(handle: *mut FlowWhisprHandl
         "Gemini" => 1,
         "OpenRouter" => 2,
         _ => 255,
+    }
+}
+
+/// Helper function to mask an API key for display
+/// Shows the prefix (e.g., "sk-" or "AI") and masks the rest with dots
+fn mask_api_key(key: &str) -> String {
+    if key.is_empty() {
+        return String::new();
+    }
+
+    // For OpenAI keys (sk-...)
+    if key.starts_with("sk-") {
+        return format!("sk-••••••••");
+    }
+    // For Gemini keys (AI...)
+    if key.starts_with("AI") {
+        return format!("AI••••••••");
+    }
+    // For other keys, just show dots
+    "••••••••".to_string()
+}
+
+/// Get API key for a specific provider in masked form
+/// provider: 0 = OpenAI, 1 = Gemini, 2 = OpenRouter
+/// Returns null if no key is set, or a masked version like "sk-••••••••"
+/// Caller must free the returned string with flowwispr_free_string
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_get_api_key(handle: *mut FlowWhisprHandle, provider: u8) -> *mut c_char {
+    let handle = unsafe { &*handle };
+
+    let setting_key = match provider {
+        0 => SETTING_OPENAI_API_KEY,
+        1 => SETTING_GEMINI_API_KEY,
+        2 => SETTING_OPENROUTER_API_KEY,
+        _ => return ptr::null_mut(),
+    };
+
+    match handle.storage.get_setting(setting_key) {
+        Ok(Some(key)) => {
+            let masked = mask_api_key(&key);
+            CString::new(masked).unwrap().into_raw()
+        }
+        _ => ptr::null_mut(),
     }
 }
 

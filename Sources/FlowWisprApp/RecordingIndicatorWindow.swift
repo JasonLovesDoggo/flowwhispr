@@ -27,7 +27,7 @@ final class RecordingIndicatorWindow {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
-        panel.setFrame(NSRect(x: 0, y: 0, width: 260, height: 32), display: false)
+        panel.setFrame(NSRect(x: 0, y: 0, width: 400, height: 40), display: false)
 
         self.window = panel
         positionWindow()
@@ -69,15 +69,13 @@ private struct RecordingIndicatorView: View {
             if appState.isRecording {
                 CompactWaveformView(isRecording: true)
                     .frame(width: 90, height: 18)
-                    .transition(.opacity)
             }
 
-            if appState.isProcessing {
+            if appState.isProcessing && !appState.isInitializingModel {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .controlSize(.small)
                     .tint(.white.opacity(0.9))
-                    .transition(.opacity)
             }
 
             if appState.isInitializingModel {
@@ -91,7 +89,6 @@ private struct RecordingIndicatorView: View {
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.9))
                 }
-                .transition(.opacity)
             }
         }
         .padding(.horizontal, FW.spacing12)
@@ -104,9 +101,9 @@ private struct RecordingIndicatorView: View {
                         .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                 }
         }
-        .animation(.easeInOut(duration: 0.2), value: appState.isRecording)
-        .animation(.easeInOut(duration: 0.2), value: appState.isProcessing)
-        .animation(.easeInOut(duration: 0.2), value: appState.isInitializingModel)
+        .animation(.easeInOut(duration: 0.25), value: appState.isRecording)
+        .animation(.easeInOut(duration: 0.25), value: appState.isProcessing)
+        .animation(.easeInOut(duration: 0.25), value: appState.isInitializingModel)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
                 pulse = true

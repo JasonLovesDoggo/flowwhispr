@@ -522,6 +522,35 @@ public final class FlowWispr: @unchecked Sendable {
         return CompletionProvider(rawValue: rawValue)
     }
 
+    /// Get API key for a specific provider in masked form
+    /// - Parameter provider: The provider to get the key for
+    /// - Returns: Masked API key (e.g., "sk-••••••••") or nil if not set
+    public func getMaskedApiKey(for provider: CompletionProvider) -> String? {
+        guard let handle = handle else { return nil }
+        guard let cString = flowwispr_get_api_key(handle, provider.rawValue) else { return nil }
+        let string = String(cString: cString)
+        flowwispr_free_string(cString)
+        return string
+    }
+
+    /// Get the OpenAI API key in masked form (e.g., "sk-••••••••")
+    /// - Returns: Masked API key or nil if not set
+    public var maskedOpenAIKey: String? {
+        getMaskedApiKey(for: .openAI)
+    }
+
+    /// Get the Gemini API key in masked form (e.g., "AI••••••••")
+    /// - Returns: Masked API key or nil if not set
+    public var maskedGeminiKey: String? {
+        getMaskedApiKey(for: .gemini)
+    }
+
+    /// Get the OpenRouter API key in masked form
+    /// - Returns: Masked API key or nil if not set
+    public var maskedOpenRouterKey: String? {
+        getMaskedApiKey(for: .openRouter)
+    }
+
     /// Set transcription mode (local or remote)
     /// - Parameter mode: The transcription mode to use
     /// - Returns: true on success

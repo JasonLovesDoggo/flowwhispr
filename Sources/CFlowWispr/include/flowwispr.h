@@ -9,6 +9,7 @@
 #ifndef FLOWWHISPR_H
 #define FLOWWHISPR_H
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -218,6 +219,12 @@ bool flowwispr_set_completion_provider(FlowWhisprHandle* handle, uint8_t provide
 /// @param handle Engine handle
 /// @return 0 = OpenAI, 1 = Gemini, 2 = OpenRouter, 255 = Unknown
 uint8_t flowwispr_get_completion_provider(FlowWhisprHandle* handle);
+
+/// Get API key for a specific provider in masked form (e.g., "sk-••••••••")
+/// @param handle Engine handle
+/// @param provider 0 = OpenAI, 1 = Gemini, 2 = OpenRouter
+/// @return Masked API key string (caller must free with flowwispr_free_string) or NULL if not set
+char* flowwispr_get_api_key(FlowWhisprHandle* handle, uint8_t provider);
 
 /// Set transcription mode (local or remote)
 /// @param handle Engine handle
