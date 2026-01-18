@@ -62,10 +62,12 @@ public enum AppCategory: UInt8, Sendable {
 /// Completion provider options
 public enum CompletionProvider: UInt8, Sendable {
     case openAI = 0
+    case gemini = 1
 
     public var displayName: String {
         switch self {
         case .openAI: return "OpenAI GPT"
+        case .gemini: return "Gemini"
         }
     }
 }
@@ -273,6 +275,19 @@ public final class FlowWispr: @unchecked Sendable {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let isSet = trimmedKey.withCString { cKey in
             flowwispr_set_api_key(handle, cKey)
+        }
+
+        return isSet
+    }
+
+    /// Set the Gemini API key
+    /// - Parameter apiKey: The Gemini API key
+    /// - Returns: true on success
+    public func setGeminiApiKey(_ apiKey: String) -> Bool {
+        guard let handle = handle else { return false }
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isSet = trimmedKey.withCString { cKey in
+            flowwispr_set_gemini_api_key(handle, cKey)
         }
 
         return isSet
