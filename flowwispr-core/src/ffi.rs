@@ -28,8 +28,8 @@ use crate::providers::{
 };
 use crate::shortcuts::ShortcutsEngine;
 use crate::storage::{
-    SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY, SETTING_OPENAI_API_KEY,
-    SETTING_OPENROUTER_API_KEY, Storage,
+    SETTING_COMPLETION_PROVIDER, SETTING_GEMINI_API_KEY, SETTING_LOCAL_WHISPER_MODEL,
+    SETTING_OPENAI_API_KEY, SETTING_OPENROUTER_API_KEY, SETTING_USE_LOCAL_TRANSCRIPTION, Storage,
 };
 use crate::types::{Shortcut, Transcription, TranscriptionHistoryEntry, TranscriptionStatus};
 
@@ -1143,6 +1143,112 @@ pub extern "C" fn flowwispr_get_completion_provider(handle: *mut FlowWhisprHandl
     }
 }
 
+/// Set transcription mode (local or remote)
+/// use_local: true for local Whisper, false for cloud provider
+/// whisper_model: 0 = Tiny, 1 = Base, 2 = Small (only used when use_local = true)
+/// Returns true on success, false on failure
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_set_transcription_mode(
+    handle: *mut FlowWhisprHandle,
+    use_local: bool,
+    whisper_model: u8,
+) -> bool {
+    let handle = unsafe { &mut *handle };
+
+    // Save setting to database
+    if let Err(e) = handle
+        .storage
+        .set_setting(SETTING_USE_LOCAL_TRANSCRIPTION, if use_local { "true" } else { "false" })
+    {
+        let message = format!("Failed to save transcription mode: {}", e);
+        error!("{}", message);
+        set_last_error(handle, message);
+        return false;
+    }
+
+    if use_local {
+        // Local Whisper transcription
+        let model = match whisper_model {
+            0 => WhisperModel::Tiny,
+            1 => WhisperModel::Base,
+            2 => WhisperModel::Small,
+            _ => {
+                set_last_error(handle, "Invalid Whisper model selection");
+                return false;
+            }
+        };
+
+        // Save model choice
+        let model_name = match model {
+            WhisperModel::Tiny => "tiny",
+            WhisperModel::Base => "base",
+            WhisperModel::Small => "small",
+        };
+        if let Err(e) = handle.storage.set_setting(SETTING_LOCAL_WHISPER_MODEL, model_name) {
+            let message = format!("Failed to save Whisper model: {}", e);
+            error!("{}", message);
+            set_last_error(handle, message);
+            return false;
+        }
+
+        // Get models directory
+        let models_dir = match crate::whisper_models::get_models_dir() {
+            Ok(dir) => dir,
+            Err(e) => {
+                let message = format!("Failed to get models directory: {}", e);
+                error!("{}", message);
+                set_last_error(handle, message);
+                return false;
+            }
+        };
+
+        // Create provider
+        let provider = Arc::new(LocalWhisperTranscriptionProvider::new(model, models_dir));
+
+        // Trigger model download/load asynchronously
+        let provider_clone = Arc::clone(&provider);
+        handle.runtime.spawn(async move {
+            if let Err(e) = provider_clone.load_model().await {
+                error!("Failed to load Whisper model: {}", e);
+            }
+        });
+
+        handle.transcription = provider;
+        debug!("Enabled local Whisper transcription with {:?} model", model);
+    } else {
+        // Remote transcription - use the current completion provider's transcription
+        let provider_name = match handle.storage.get_setting(SETTING_COMPLETION_PROVIDER) {
+            Ok(Some(name)) => name,
+            _ => "openai".to_string(), // default to OpenAI
+        };
+
+        match provider_name.as_str() {
+            "openai" => {
+                if let Ok(Some(key)) = handle.storage.get_setting(SETTING_OPENAI_API_KEY) {
+                    handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key)));
+                    debug!("Enabled OpenAI remote transcription");
+                }
+            }
+            "gemini" => {
+                if let Ok(Some(key)) = handle.storage.get_setting(SETTING_GEMINI_API_KEY) {
+                    handle.transcription = Arc::new(GeminiTranscriptionProvider::new(Some(key)));
+                    debug!("Enabled Gemini remote transcription");
+                }
+            }
+            _ => {
+                // Default to OpenAI
+                if let Ok(Some(key)) = handle.storage.get_setting(SETTING_OPENAI_API_KEY) {
+                    handle.transcription = Arc::new(OpenAITranscriptionProvider::new(Some(key)));
+                    debug!("Enabled OpenAI remote transcription (default)");
+                }
+            }
+        }
+    }
+
+    true
+}
+
+/// Legacy function - prefer flowwispr_set_transcription_mode
 /// Enable local Whisper transcription with Metal acceleration
 /// model: 0 = Tiny, 1 = Base, 2 = Small
 /// Returns true on success, false on failure
@@ -1151,44 +1257,7 @@ pub extern "C" fn flowwispr_enable_local_whisper(
     handle: *mut FlowWhisprHandle,
     model: u8,
 ) -> bool {
-    let handle = unsafe { &mut *handle };
-
-    let whisper_model = match model {
-        0 => WhisperModel::Tiny,
-        1 => WhisperModel::Base,
-        2 => WhisperModel::Small,
-        _ => {
-            set_last_error(handle, "Invalid Whisper model selection");
-            return false;
-        }
-    };
-
-    // Get models directory
-    let models_dir = match crate::whisper_models::get_models_dir() {
-        Ok(dir) => dir,
-        Err(e) => {
-            let message = format!("Failed to get models directory: {}", e);
-            error!("{}", message);
-            set_last_error(handle, message);
-            return false;
-        }
-    };
-
-    // Create provider
-    let provider = Arc::new(LocalWhisperTranscriptionProvider::new(whisper_model, models_dir));
-
-    // Trigger model download/load asynchronously
-    let provider_clone = Arc::clone(&provider);
-    handle.runtime.spawn(async move {
-        if let Err(e) = provider_clone.load_model().await {
-            error!("Failed to load Whisper model: {}", e);
-        }
-    });
-
-    handle.transcription = provider;
-    debug!("Enabled local Whisper transcription with {:?} model", whisper_model);
-
-    true
+    flowwispr_set_transcription_mode(handle, true, model)
 }
 
 /// Get all shortcuts as JSON (caller must free with flowwispr_free_string)

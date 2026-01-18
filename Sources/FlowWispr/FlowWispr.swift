@@ -82,7 +82,7 @@ public enum WhisperModel: UInt8, Sendable {
 
     public var displayName: String {
         switch self {
-        case .tiny: return "Tiny (75MB)"
+        case .tiny: return "Tiny (39MB)"
         case .base: return "Base (142MB)"
         case .small: return "Small (466MB)"
         }
@@ -93,6 +93,19 @@ public enum WhisperModel: UInt8, Sendable {
         case .tiny: return "Fastest, least accurate"
         case .base: return "Good balance"
         case .small: return "Better accuracy"
+        }
+    }
+}
+
+/// Transcription mode: local or remote
+public enum TranscriptionMode: Sendable {
+    case local(model: WhisperModel)
+    case remote
+
+    public var displayName: String {
+        switch self {
+        case .local(let model): return "Local (\(model.displayName))"
+        case .remote: return "Cloud API"
         }
     }
 }
@@ -502,12 +515,26 @@ public final class FlowWispr: @unchecked Sendable {
         return CompletionProvider(rawValue: rawValue)
     }
 
-    /// Enable local Whisper transcription with Metal acceleration
+    /// Set transcription mode (local or remote)
+    /// - Parameter mode: The transcription mode to use
+    /// - Returns: true on success
+    public func setTranscriptionMode(_ mode: TranscriptionMode) -> Bool {
+        guard let handle = handle else { return false }
+
+        switch mode {
+        case .local(let model):
+            return flowwispr_set_transcription_mode(handle, true, model.rawValue)
+        case .remote:
+            return flowwispr_set_transcription_mode(handle, false, 0) // model doesn't matter for remote
+        }
+    }
+
+    /// Legacy: Enable local Whisper transcription with Metal acceleration
     /// - Parameter model: The Whisper model to use
     /// - Returns: true on success
+    @available(*, deprecated, message: "Use setTranscriptionMode(.local(model:)) instead")
     public func enableLocalWhisper(_ model: WhisperModel) -> Bool {
-        guard let handle = handle else { return false }
-        return flowwispr_enable_local_whisper(handle, model.rawValue)
+        return setTranscriptionMode(.local(model: model))
     }
 
     // Configuration persistence is handled in the core database.
