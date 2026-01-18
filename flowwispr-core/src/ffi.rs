@@ -20,7 +20,9 @@ use tracing::{debug, error};
 
 use crate::apps::AppTracker;
 use crate::audio::{AudioCapture, CaptureState};
+use crate::contacts::{ContactClassifier, ContactInput};
 use crate::learning::LearningEngine;
+use crate::macos_messages::MessagesDetector;
 use crate::modes::{StyleLearner, WritingMode, WritingModeEngine};
 use crate::providers::{
     CompletionProvider, CompletionRequest, GeminiCompletionProvider, GeminiTranscriptionProvider,
@@ -50,6 +52,9 @@ pub struct FlowWhisprHandle {
     app_tracker: AppTracker,
     style_learner: Mutex<StyleLearner>,
     is_model_loading: Arc<AtomicBool>,
+    contact_classifier: ContactClassifier,
+    /// Captured contact name at recording start (for Messages.app context)
+    captured_contact: Mutex<Option<String>>,
 }
 
 #[derive(Serialize)]
@@ -156,6 +161,7 @@ pub extern "C" fn flowwispr_init(db_path: *const c_char) -> *mut FlowWhisprHandl
     let modes = WritingModeEngine::new(WritingMode::Casual);
     let app_tracker = AppTracker::new();
     let style_learner = StyleLearner::new();
+    let contact_classifier = ContactClassifier::new();
 
     let mut handle = FlowWhisprHandle {
         runtime,
@@ -172,6 +178,8 @@ pub extern "C" fn flowwispr_init(db_path: *const c_char) -> *mut FlowWhisprHandl
         app_tracker,
         style_learner: Mutex::new(style_learner),
         is_model_loading: Arc::new(AtomicBool::new(false)),
+        contact_classifier,
+        captured_contact: Mutex::new(None),
     };
 
     load_persisted_configuration(&mut handle);
@@ -199,6 +207,36 @@ pub extern "C" fn flowwispr_destroy(handle: *mut FlowWhisprHandle) {
 #[unsafe(no_mangle)]
 pub extern "C" fn flowwispr_start_recording(handle: *mut FlowWhisprHandle) -> bool {
     let handle = unsafe { &*handle };
+
+    // Capture the active Messages contact at recording START (before any focus changes)
+    // This ensures we get the correct contact context for the transcription
+    let current_app = handle.app_tracker.current_app();
+    let is_messages = current_app
+        .as_ref()
+        .map(|ctx| {
+            ctx.app_name.to_lowercase().contains("messages")
+                || ctx.bundle_id.as_deref() == Some("com.apple.MobileSMS")
+        })
+        .unwrap_or(false);
+
+    if is_messages {
+        match MessagesDetector::get_active_contact() {
+            Ok(Some(contact_name)) => {
+                debug!("Captured Messages contact at recording start: {}", contact_name);
+                *handle.captured_contact.lock() = Some(contact_name);
+            }
+            Ok(None) => {
+                debug!("Messages active but no conversation detected at recording start");
+                *handle.captured_contact.lock() = None;
+            }
+            Err(e) => {
+                debug!("Failed to capture Messages contact at recording start: {}", e);
+                *handle.captured_contact.lock() = None;
+            }
+        }
+    } else {
+        *handle.captured_contact.lock() = None;
+    }
 
     let mut audio_lock = handle.audio.lock();
 
@@ -282,9 +320,44 @@ fn transcribe_with_audio(
     sample_rate: u32,
     app_name: Option<String>,
 ) -> crate::error::Result<String> {
+    // Determine writing mode - use contact captured at recording start for Messages
     let mode = if let Some(ref name) = app_name {
-        let mut modes = handle.modes.lock();
-        modes.get_mode_with_storage(name, &handle.storage)
+        // Check if this is Messages.app
+        if name.to_lowercase().contains("messages") || name == "com.apple.MobileSMS" {
+            // Use the contact that was captured when recording started
+            // This avoids race conditions where the window focus changes during recording
+            let captured = handle.captured_contact.lock().clone();
+
+            if let Some(contact_name) = captured {
+                debug!("Using captured Messages contact: {}", contact_name);
+
+                // Classify the contact
+                let input = ContactInput {
+                    name: contact_name.clone(),
+                    organization: String::new(),
+                };
+                let category = handle.contact_classifier.classify(&input);
+                let contact_mode = category.suggested_writing_mode();
+
+                debug!(
+                    "Contact '{}' classified as {:?}, using mode {:?}",
+                    contact_name, category, contact_mode
+                );
+
+                // Record the interaction
+                handle.contact_classifier.record_interaction(&contact_name);
+
+                contact_mode
+            } else {
+                debug!("No contact was captured at recording start, using app default");
+                let mut modes = handle.modes.lock();
+                modes.get_mode_with_storage(name, &handle.storage)
+            }
+        } else {
+            // Not Messages - use app-based mode
+            let mut modes = handle.modes.lock();
+            modes.get_mode_with_storage(name, &handle.storage)
+        }
     } else {
         WritingMode::Casual
     };
@@ -392,6 +465,9 @@ pub extern "C" fn flowwispr_transcribe(
     *handle.last_audio.lock() = Some(audio_data.clone());
     *handle.last_audio_sample_rate.lock() = Some(sample_rate);
     let result = transcribe_with_audio(handle, audio_data, sample_rate, app);
+
+    // Clear the captured contact after transcription (whether success or failure)
+    *handle.captured_contact.lock() = None;
 
     match result {
         Ok(text) => {
@@ -1413,5 +1489,225 @@ pub extern "C" fn flowwispr_get_shortcuts_json(handle: *mut FlowWhisprHandle) ->
     match CString::new(serde_json::to_string(&shortcuts).unwrap_or_default()) {
         Ok(cstr) => cstr.into_raw(),
         Err(_) => ptr::null_mut(),
+    }
+}
+
+// ============ Contact Categorization ============
+
+/// Get active contact name from Messages.app window
+/// Returns C string with contact name, or null if not available
+/// Caller must free with flowwispr_free_string
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_get_active_messages_contact(
+    handle: *mut FlowWhisprHandle,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    match MessagesDetector::get_active_contact() {
+        Ok(Some(name)) => match CString::new(name) {
+            Ok(cstr) => cstr.into_raw(),
+            Err(_) => {
+                set_last_error(handle, "Invalid UTF-8 in contact name");
+                ptr::null_mut()
+            }
+        },
+        Ok(None) => ptr::null_mut(),
+        Err(e) => {
+            set_last_error(handle, format!("Failed to get active contact: {}", e));
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Classify a contact given name and organization
+/// Returns JSON string with category
+/// Caller must free with flowwispr_free_string
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_classify_contact(
+    handle: *mut FlowWhisprHandle,
+    name: *const c_char,
+    organization: *const c_char,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let name_str = unsafe {
+        if name.is_null() {
+            set_last_error(handle, "Name cannot be null");
+            return ptr::null_mut();
+        }
+        match CStr::from_ptr(name).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                set_last_error(handle, "Invalid UTF-8 in name");
+                return ptr::null_mut();
+            }
+        }
+    };
+
+    let org_str = unsafe {
+        if organization.is_null() {
+            String::new()
+        } else {
+            match CStr::from_ptr(organization).to_str() {
+                Ok(s) => s.to_string(),
+                Err(_) => String::new(),
+            }
+        }
+    };
+
+    let input = ContactInput {
+        name: name_str.to_string(),
+        organization: org_str,
+    };
+
+    let category = handle.contact_classifier.classify(&input);
+
+    let result = serde_json::json!({
+        "name": name_str,
+        "category": category,
+    });
+
+    match CString::new(result.to_string()) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => {
+            set_last_error(handle, "Failed to serialize result");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Classify multiple contacts from JSON array
+/// Input format: [{"name": "...", "organization": "..."}]
+/// Output format: {"ContactName": "category", ...}
+/// Caller must free with flowwispr_free_string
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_classify_contacts_batch(
+    handle: *mut FlowWhisprHandle,
+    contacts_json: *const c_char,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let json_str = unsafe {
+        if contacts_json.is_null() {
+            set_last_error(handle, "JSON cannot be null");
+            return ptr::null_mut();
+        }
+        match CStr::from_ptr(contacts_json).to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                set_last_error(handle, "Invalid UTF-8 in JSON");
+                return ptr::null_mut();
+            }
+        }
+    };
+
+    let inputs: Vec<ContactInput> = match serde_json::from_str(json_str) {
+        Ok(i) => i,
+        Err(e) => {
+            set_last_error(handle, format!("Invalid JSON: {}", e));
+            return ptr::null_mut();
+        }
+    };
+
+    let result_json = handle.contact_classifier.classify_batch_json(&inputs);
+
+    match CString::new(result_json) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => {
+            set_last_error(handle, "Failed to create result string");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Record interaction with a contact (updates frequency)
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_record_contact_interaction(
+    handle: *mut FlowWhisprHandle,
+    name: *const c_char,
+) {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let name_str = unsafe {
+        if name.is_null() {
+            return;
+        }
+        match CStr::from_ptr(name).to_str() {
+            Ok(s) => s,
+            Err(_) => return,
+        }
+    };
+
+    handle.contact_classifier.record_interaction(name_str);
+}
+
+/// Get frequent contacts as JSON array
+/// Returns: [{"name": "...", "category": "...", "frequency": N}, ...]
+/// Caller must free with flowwispr_free_string
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_get_frequent_contacts(
+    handle: *mut FlowWhisprHandle,
+    limit: u32,
+) -> *mut c_char {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    let contacts = handle
+        .contact_classifier
+        .get_frequent_contacts(limit as usize);
+
+    let result: Vec<serde_json::Value> = contacts
+        .iter()
+        .map(|c| {
+            serde_json::json!({
+                "name": c.name,
+                "category": c.category,
+                "frequency": c.frequency,
+                "organization": c.organization,
+            })
+        })
+        .collect();
+
+    match CString::new(serde_json::to_string(&result).unwrap_or_default()) {
+        Ok(cstr) => cstr.into_raw(),
+        Err(_) => {
+            set_last_error(handle, "Failed to serialize contacts");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Get suggested writing mode for a contact category
+/// Returns: 0=Formal, 1=Casual, 2=VeryCasual, 3=Excited
+#[unsafe(no_mangle)]
+pub extern "C" fn flowwispr_get_writing_mode_for_category(
+    handle: *mut FlowWhisprHandle,
+    category: u32,
+) -> u32 {
+    let handle = unsafe { &*handle };
+    clear_last_error(handle);
+
+    use crate::types::ContactCategory;
+
+    let contact_category = match category {
+        0 => ContactCategory::Professional,
+        1 => ContactCategory::CloseFamily,
+        2 => ContactCategory::CasualPeer,
+        3 => ContactCategory::Partner,
+        4 => ContactCategory::FormalNeutral,
+        _ => ContactCategory::FormalNeutral,
+    };
+
+    let writing_mode = contact_category.suggested_writing_mode();
+
+    match writing_mode {
+        WritingMode::Formal => 0,
+        WritingMode::Casual => 1,
+        WritingMode::VeryCasual => 2,
+        WritingMode::Excited => 3,
     }
 }
