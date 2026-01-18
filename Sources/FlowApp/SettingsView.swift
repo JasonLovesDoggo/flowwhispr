@@ -511,7 +511,7 @@ private struct AboutFooter: View {
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(FW.textPrimary)
 
-                Text("v0.1.7")
+                Text("v0.1.9")
                     .font(.caption)
                     .foregroundStyle(FW.textMuted)
             }
