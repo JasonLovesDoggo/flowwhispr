@@ -21,7 +21,7 @@ pub async fn main(mut req: Request, env: Env, _ctx: worker::Context) -> Result<R
     init.with_body(Some(body.into()));
 
     let mut upstream = Request::new_with_init(BASE10_API_URL, &init)?;
-    let headers = upstream.headers_mut();
+    let headers = upstream.headers_mut()?;
     headers.set("Authorization", &format!("Api-Key {}", api_key))?;
 
     match req.headers().get("Content-Type")? {
