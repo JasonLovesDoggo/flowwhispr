@@ -483,10 +483,10 @@ final class AppState: ObservableObject {
         let duration = engine.stopRecording()
         isRecording = false
 
-        log("⏳ [RESUME] Scheduling music resume in 2s...")
-        // Wait 2s before resuming music to let CoreAudio settle after mic release
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.log("▶️ [RESUME] Resuming music playback now")
+        log("⏳ [RESUME] Scheduling music resume in 1.95s...")
+        // Wait 1.95s before resuming music to let CoreAudio settle after mic release
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.95) { [weak self] in
+            self?.log("▶️ [RESUME] Resuming music playback")
             self?.resumeMediaPlayback()
         }
 
