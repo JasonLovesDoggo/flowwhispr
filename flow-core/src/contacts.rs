@@ -310,8 +310,21 @@ mod tests {
 
         // All partner keywords must be detected
         let partner_keywords = [
-            "bae", "hubby", "wife", "wifey", "husband", "my love", "baby", "babe", "love",
-            "honey", "sweetheart", "darling", "dear", "sweetie", "boo",
+            "bae",
+            "hubby",
+            "wife",
+            "wifey",
+            "husband",
+            "my love",
+            "baby",
+            "babe",
+            "love",
+            "honey",
+            "sweetheart",
+            "darling",
+            "dear",
+            "sweetie",
+            "boo",
         ];
         for keyword in partner_keywords {
             let input = ContactInput {
@@ -404,9 +417,25 @@ mod tests {
 
         // All family keywords must be detected
         let family_keywords = [
-            "mom", "dad", "mama", "papa", "mother", "father", "grandma", "grandpa",
-            "grandmother", "grandfather", "aunt", "uncle", "sister", "brother", "sis", "bro",
-            "cousin", "nephew", "niece",
+            "mom",
+            "dad",
+            "mama",
+            "papa",
+            "mother",
+            "father",
+            "grandma",
+            "grandpa",
+            "grandmother",
+            "grandfather",
+            "aunt",
+            "uncle",
+            "sister",
+            "brother",
+            "sis",
+            "bro",
+            "cousin",
+            "nephew",
+            "niece",
         ];
         for keyword in family_keywords {
             let input = ContactInput {

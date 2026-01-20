@@ -145,7 +145,7 @@ private struct TranscriptionSection: View {
     private func loadCurrentMode() {
         if let mode = appState.engine.getTranscriptionMode() {
             switch mode {
-            case .local(let model):
+            case let .local(model):
                 useLocalTranscription = true
                 selectedWhisperModel = model
             case .remote:
@@ -161,7 +161,7 @@ private struct WhisperModelPicker: View {
     private let models: [(WhisperModel, String, String)] = [
         (.fast, "Fast", "Tiny (~39MB). Quick, less accurate."),
         (.balanced, "Balanced", "Base (~142MB). Good tradeoff."),
-        (.quality, "Quality", "Distil-medium (~400MB). Best accuracy.")
+        (.quality, "Quality", "Distil-medium (~400MB). Best accuracy."),
     ]
 
     var body: some View {

@@ -27,10 +27,18 @@ final class GlobeKeyHandler {
     private var isFunctionDown = false
     private var functionUsedAsModifier = false
     private var hasFiredFnPressed = false
+    private var fnPressTime: Date?
 
     private var isModifierDown = false
     private var modifierUsedAsModifier = false
     private var hasFiredModifierPressed = false
+    private var modifierPressTime: Date?
+
+    // Stale state detection: if a key appears held for longer than this, assume we missed the release
+    private let staleKeyTimeout: TimeInterval = 5.0
+
+    // Periodic health check to ensure the event tap stays enabled
+    private var tapHealthTimer: Timer?
 
     // Resilience: track tap restarts to avoid infinite loops
     private var tapRestartCount = 0
@@ -44,6 +52,8 @@ final class GlobeKeyHandler {
     }
 
     deinit {
+        tapHealthTimer?.invalidate()
+        tapHealthTimer = nil
         if let eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
         }
@@ -59,9 +69,11 @@ final class GlobeKeyHandler {
         isFunctionDown = false
         functionUsedAsModifier = false
         hasFiredFnPressed = false
+        fnPressTime = nil
         isModifierDown = false
         modifierUsedAsModifier = false
         hasFiredModifierPressed = false
+        modifierPressTime = nil
     }
 
     @discardableResult
@@ -89,7 +101,26 @@ final class GlobeKeyHandler {
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
         tapRestartCount = 0
+
+        // Start periodic health check to ensure the tap stays enabled
+        // System can disable taps if they're slow or unresponsive
+        // Using 0.5s interval for faster recovery when tap gets disabled
+        tapHealthTimer?.invalidate()
+        tapHealthTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            self?.ensureTapEnabled()
+        }
+
         return true
+    }
+
+    private func ensureTapEnabled() {
+        guard let eventTap else { return }
+        if !CGEvent.tapIsEnabled(tap: eventTap) {
+            #if DEBUG
+                print("[HOTKEY] Tap was disabled, re-enabling")
+            #endif
+            CGEvent.tapEnable(tap: eventTap, enable: true)
+        }
     }
 
     static func isAccessibilityAuthorized() -> Bool {
@@ -119,28 +150,40 @@ final class GlobeKeyHandler {
             case .flagsChanged:
                 handleFunctionFlagChange(event)
             case .keyDown:
-                if isFunctionDown {
+                // Only mark as used if Fn is ACTUALLY pressed in this event's flags.
+                // System events like Cmd+V don't have Fn flag, so they shouldn't
+                // incorrectly mark Fn as "used as a combo key".
+                if isFunctionDown, event.flags.contains(.maskSecondaryFn) {
                     let keycode = event.getIntegerValueField(.keyboardEventKeycode)
                     // kVK_Function = 63
                     if keycode != 63 {
+                        #if DEBUG
+                            print("[HOTKEY] keyDown with Fn held, marking as used")
+                        #endif
                         functionUsedAsModifier = true
                     }
                 }
             default:
                 break
             }
-        case .modifierOnly(let modifier):
+        case let .modifierOnly(modifier):
             switch type {
             case .flagsChanged:
                 handleModifierFlagChange(event, modifier: modifier)
             case .keyDown:
-                if isModifierDown {
+                // Only mark as used if the modifier is ACTUALLY pressed in this event.
+                // System events like Cmd+V don't have our modifier flag, so they shouldn't
+                // incorrectly mark the modifier as "used as a combo key".
+                if isModifierDown, event.flags.contains(modifier.cgFlag) {
+                    #if DEBUG
+                        print("[HOTKEY] keyDown with modifier held, marking as used")
+                    #endif
                     modifierUsedAsModifier = true
                 }
             default:
                 break
             }
-        case .custom(let keyCode, let modifiers, _):
+        case let .custom(keyCode, modifiers, _):
             // Handle custom key+modifier combos via CGEventTap (no Carbon needed)
             if type == .keyDown {
                 handleCustomKeyDown(event, expectedKeyCode: keyCode, expectedModifiers: modifiers)
@@ -152,7 +195,7 @@ final class GlobeKeyHandler {
         let pressedKeyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let pressedModifiers = Hotkey.Modifiers.from(cgFlags: event.flags)
 
-        if pressedKeyCode == expectedKeyCode && pressedModifiers == expectedModifiers {
+        if pressedKeyCode == expectedKeyCode, pressedModifiers == expectedModifiers {
             fireHotkey(.toggle)
         }
     }
@@ -178,10 +221,30 @@ final class GlobeKeyHandler {
 
     private func handleFunctionFlagChange(_ event: CGEvent) {
         let hasFn = event.flags.contains(.maskSecondaryFn)
+
+        #if DEBUG
+            print("[HOTKEY] Fn flagsChanged: hasFn=\(hasFn), isFunctionDown=\(isFunctionDown)")
+        #endif
+
+        // Detect and recover from stale state: if we think the key is held but it's been
+        // too long, we probably missed the release event (tap was disabled, run loop blocked, etc.)
+        if isFunctionDown, let pressTime = fnPressTime,
+           Date().timeIntervalSince(pressTime) > staleKeyTimeout
+        {
+            #if DEBUG
+                print("[HOTKEY] Fn stale state detected, resetting")
+            #endif
+            isFunctionDown = false
+            hasFiredFnPressed = false
+            functionUsedAsModifier = false
+            fnPressTime = nil
+        }
+
         guard hasFn != isFunctionDown else { return }
 
         if hasFn {
             isFunctionDown = true
+            fnPressTime = Date()
             functionUsedAsModifier = false
             hasFiredFnPressed = true
             // Fire immediately - no delay for instant response
@@ -191,8 +254,9 @@ final class GlobeKeyHandler {
 
         guard isFunctionDown else { return }
         isFunctionDown = false
+        fnPressTime = nil
 
-        if hasFiredFnPressed && !functionUsedAsModifier {
+        if hasFiredFnPressed, !functionUsedAsModifier {
             fireHotkey(.released)
         }
         hasFiredFnPressed = false
@@ -201,12 +265,30 @@ final class GlobeKeyHandler {
     private func handleModifierFlagChange(_ event: CGEvent, modifier: Hotkey.ModifierKey) {
         let hasModifier = event.flags.contains(modifier.cgFlag)
 
+        #if DEBUG
+            print("[HOTKEY] Modifier flagsChanged: hasModifier=\(hasModifier), isModifierDown=\(isModifierDown)")
+        #endif
+
+        // Detect and recover from stale state: if we think the key is held but it's been
+        // too long, we probably missed the release event (tap was disabled, run loop blocked, etc.)
+        if isModifierDown, let pressTime = modifierPressTime,
+           Date().timeIntervalSince(pressTime) > staleKeyTimeout
+        {
+            #if DEBUG
+                print("[HOTKEY] Modifier stale state detected, resetting")
+            #endif
+            isModifierDown = false
+            hasFiredModifierPressed = false
+            modifierUsedAsModifier = false
+            modifierPressTime = nil
+        }
+
         // Check if other modifiers are also pressed (means it's being used as a combo)
         let otherModifiersPressed = hasOtherModifiers(event.flags, excluding: modifier)
 
         guard hasModifier != isModifierDown else {
             // If the modifier is still down but other modifiers changed, mark as used
-            if isModifierDown && otherModifiersPressed {
+            if isModifierDown, otherModifiersPressed {
                 modifierUsedAsModifier = true
             }
             return
@@ -219,6 +301,7 @@ final class GlobeKeyHandler {
                 return
             }
             isModifierDown = true
+            modifierPressTime = Date()
             modifierUsedAsModifier = false
             hasFiredModifierPressed = true
             // Fire immediately - no delay for instant response
@@ -229,8 +312,9 @@ final class GlobeKeyHandler {
         // Modifier released
         guard isModifierDown else { return }
         isModifierDown = false
+        modifierPressTime = nil
 
-        if hasFiredModifierPressed && !modifierUsedAsModifier {
+        if hasFiredModifierPressed, !modifierUsedAsModifier {
             fireHotkey(.released)
         }
         hasFiredModifierPressed = false
@@ -241,7 +325,7 @@ final class GlobeKeyHandler {
             (.maskAlternate, .option),
             (.maskShift, .shift),
             (.maskControl, .control),
-            (.maskCommand, .command)
+            (.maskCommand, .command),
         ]
         for (flag, key) in allModifiers {
             if key != excluding && flags.contains(flag) {
@@ -257,7 +341,7 @@ final class GlobeKeyHandler {
 }
 
 private func globeKeyEventTapCallback(
-    proxy: CGEventTapProxy,
+    proxy _: CGEventTapProxy,
     type: CGEventType,
     event: CGEvent,
     refcon: UnsafeMutableRawPointer?

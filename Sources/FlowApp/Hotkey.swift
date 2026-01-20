@@ -94,7 +94,7 @@ struct Hotkey: Equatable {
                 (.maskAlternate, .option),
                 (.maskShift, .shift),
                 (.maskControl, .control),
-                (.maskCommand, .command)
+                (.maskCommand, .command),
             ]
             var found: ModifierKey?
             for (flag, key) in modifiers {
@@ -133,9 +133,9 @@ struct Hotkey: Equatable {
         switch kind {
         case .globe:
             return "Fn key"
-        case .modifierOnly(let modifier):
+        case let .modifierOnly(modifier):
             return modifier.displayName
-        case .custom(_, let modifiers, let keyLabel):
+        case let .custom(_, modifiers, keyLabel):
             return "\(modifiers.displayString)\(keyLabel)"
         }
     }
@@ -171,9 +171,9 @@ struct Hotkey: Equatable {
         switch kind {
         case .globe:
             return StoredHotkey(kind: "globe")
-        case .modifierOnly(let modifier):
+        case let .modifierOnly(modifier):
             return StoredHotkey(kind: "modifierOnly", modifierKey: modifier.rawValue)
-        case .custom(let keyCode, let modifiers, let keyLabel):
+        case let .custom(keyCode, modifiers, keyLabel):
             return StoredHotkey(
                 kind: "custom",
                 keyCode: keyCode,
@@ -187,14 +187,16 @@ struct Hotkey: Equatable {
         switch stored.kind {
         case "modifierOnly":
             if let modifierKeyRaw = stored.modifierKey,
-               let modifier = ModifierKey(rawValue: modifierKeyRaw) {
+               let modifier = ModifierKey(rawValue: modifierKeyRaw)
+            {
                 return Hotkey(kind: .modifierOnly(modifier))
             }
         case "custom":
             if let keyCode = stored.keyCode,
                let modifiersRaw = stored.modifiers,
                let keyLabel = stored.keyLabel,
-               !keyLabel.isEmpty {
+               !keyLabel.isEmpty
+            {
                 return Hotkey(
                     kind: .custom(
                         keyCode: keyCode,
@@ -258,7 +260,7 @@ struct Hotkey: Equatable {
         KeyCode.f17: "F17",
         KeyCode.f18: "F18",
         KeyCode.f19: "F19",
-        KeyCode.f20: "F20"
+        KeyCode.f20: "F20",
     ]
 }
 

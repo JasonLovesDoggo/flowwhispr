@@ -15,7 +15,8 @@ use crate::error::{Error, Result};
 use super::{TranscriptionProvider, TranscriptionRequest, TranscriptionResponse};
 
 const FLOW_WORKER_URL: &str = "https://flow-worker.test-j.workers.dev";
-const FLOW_WORKER_VALIDATE_URL: &str = "https://flow-worker.test-j.workers.dev/validate-corrections";
+const FLOW_WORKER_VALIDATE_URL: &str =
+    "https://flow-worker.test-j.workers.dev/validate-corrections";
 
 /// Auto transcription provider (with integrated completion)
 pub struct AutoTranscriptionProvider {

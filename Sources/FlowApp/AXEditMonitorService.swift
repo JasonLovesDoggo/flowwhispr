@@ -40,11 +40,11 @@ final class AXEditMonitorService {
     func startMonitoring(element: AXUIElement, originalText: String) {
         stopMonitoring()
 
-        self.monitoredElement = element
+        monitoredElement = element
         self.originalText = originalText
-        self.lastText = originalText
-        self.startTime = Date()
-        self.lastTextChangeTime = Date()
+        lastText = originalText
+        startTime = Date()
+        lastTextChangeTime = Date()
 
         // Get app PID from element
         var pid: pid_t = 0
@@ -62,12 +62,13 @@ final class AXEditMonitorService {
         }
 
         guard AXObserverCreate(pid, callback, &observer) == .success,
-              let observer = observer else {
+              let observer = observer
+        else {
             log("Failed to create AX observer")
             return
         }
 
-        self.axObserver = observer
+        axObserver = observer
 
         // Add notifications
         let refcon = Unmanaged.passUnretained(self).toOpaque()
@@ -103,14 +104,15 @@ final class AXEditMonitorService {
 
     // MARK: - Private Methods
 
-    private func handleNotification(element: AXUIElement, notification: String) {
+    private func handleNotification(element: AXUIElement, notification _: String) {
         // Reset stability timer on any change
         stabilityTimer?.invalidate()
 
         // Read current text
         var value: AnyObject?
         guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
-              let currentText = value as? String else {
+              let currentText = value as? String
+        else {
             return
         }
 
@@ -153,8 +155,8 @@ final class AXEditMonitorService {
 
     private func log(_ message: String) {
         #if DEBUG
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        print("[\(timestamp)] [AXMonitor] \(message)")
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            print("[\(timestamp)] [AXMonitor] \(message)")
         #endif
     }
 }
@@ -170,7 +172,8 @@ extension AXEditMonitorService {
 
         var focusedElement: CFTypeRef?
         guard AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
-              let focused = focusedElement else {
+              let focused = focusedElement
+        else {
             return nil
         }
 
@@ -193,7 +196,8 @@ extension AXEditMonitorService {
     static func getTextValue(from element: AXUIElement) -> String? {
         var value: AnyObject?
         guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
-              let text = value as? String, !text.isEmpty else {
+              let text = value as? String, !text.isEmpty
+        else {
             return nil
         }
         return text

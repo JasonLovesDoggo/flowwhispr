@@ -35,5 +35,8 @@ fn main() {
         panic!("cbindgen generation failed");
     }
 
-    println!("cargo:warning=Generated C header: {}", output_file.display());
+    println!(
+        "cargo:warning=Generated C header: {}",
+        output_file.display()
+    );
 }

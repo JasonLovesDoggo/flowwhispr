@@ -144,42 +144,42 @@ final class LearnedWordsToastController {
 
         guard let window = window else { return }
 
-        NSAnimationContext.runAnimationGroup({ context in
+        NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             window.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
+        } completionHandler: { [weak self] in
             window.orderOut(nil)
             self?.window = nil
-        })
+        }
     }
 }
 
 // MARK: - Preview
 
 #if DEBUG
-struct LearnedWordsToast_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack(spacing: 20) {
-            LearnedWordsToast(
-                words: ["Anthropic"],
-                onUndo: {},
-                onDismiss: {}
-            )
+    struct LearnedWordsToast_Previews: PreviewProvider {
+        static var previews: some View {
+            VStack(spacing: 20) {
+                LearnedWordsToast(
+                    words: ["Anthropic"],
+                    onUndo: {},
+                    onDismiss: {}
+                )
 
-            LearnedWordsToast(
-                words: ["Anthropic", "Claude", "OpenAI"],
-                onUndo: {},
-                onDismiss: {}
-            )
+                LearnedWordsToast(
+                    words: ["Anthropic", "Claude", "OpenAI"],
+                    onUndo: {},
+                    onDismiss: {}
+                )
 
-            LearnedWordsToast(
-                words: ["Anthropic", "Claude", "OpenAI", "ChatGPT", "Gemini"],
-                onUndo: {},
-                onDismiss: {}
-            )
+                LearnedWordsToast(
+                    words: ["Anthropic", "Claude", "OpenAI", "ChatGPT", "Gemini"],
+                    onUndo: {},
+                    onDismiss: {}
+                )
+            }
+            .padding()
+            .background(Color.gray.opacity(0.3))
         }
-        .padding()
-        .background(Color.gray.opacity(0.3))
     }
-}
 #endif

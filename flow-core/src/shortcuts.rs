@@ -301,7 +301,6 @@ mod tests {
         assert_eq!(result, "test foo here");
     }
 
-
     #[test]
     fn test_empty_text_processing() {
         let engine = ShortcutsEngine::new();

@@ -8,8 +8,8 @@
 // Requires "Accessibility" permission in System Settings > Privacy & Security.
 //
 
-import ApplicationServices
 import AppKit
+import ApplicationServices
 import Foundation
 
 // MARK: - IDE Context
@@ -112,7 +112,7 @@ struct TextFieldContext {
     )
 }
 
-final class AccessibilityContext {
+enum AccessibilityContext {
     /// Extract context from the currently focused text element
     static func extractFocusedTextContext() -> TextFieldContext {
         guard let focusedElement = getFocusedElement() else {
@@ -125,7 +125,7 @@ final class AccessibilityContext {
         let textRoles = [
             kAXTextFieldRole as String,
             kAXTextAreaRole as String,
-            kAXComboBoxRole as String
+            kAXComboBoxRole as String,
         ]
 
         guard let role, textRoles.contains(role) else {
@@ -231,20 +231,21 @@ final class AccessibilityContext {
 
     /// Bundle IDs for supported IDEs
     private static let ideBundleIDs = [
-        "com.todesktop.230313mzl4w4u92",  // Cursor
-        "com.microsoft.VSCode",            // VSCode
-        "com.microsoft.VSCodeInsiders",    // VSCode Insiders
-        "com.jetbrains.intellij",          // IntelliJ IDEA
-        "com.jetbrains.WebStorm",          // WebStorm
-        "com.jetbrains.pycharm",           // PyCharm
-        "com.sublimetext.4",               // Sublime Text 4
-        "com.sublimetext.3"                // Sublime Text 3
+        "com.todesktop.230313mzl4w4u92", // Cursor
+        "com.microsoft.VSCode", // VSCode
+        "com.microsoft.VSCodeInsiders", // VSCode Insiders
+        "com.jetbrains.intellij", // IntelliJ IDEA
+        "com.jetbrains.WebStorm", // WebStorm
+        "com.jetbrains.pycharm", // PyCharm
+        "com.sublimetext.4", // Sublime Text 4
+        "com.sublimetext.3", // Sublime Text 3
     ]
 
     /// Check if the frontmost app is a supported IDE
     static func isIDEActive() -> Bool {
         guard let app = NSWorkspace.shared.frontmostApplication,
-              let bundleId = app.bundleIdentifier else {
+              let bundleId = app.bundleIdentifier
+        else {
             return false
         }
         return ideBundleIDs.contains(bundleId)
@@ -254,7 +255,8 @@ final class AccessibilityContext {
     static func extractIDEContext() -> IDEContext? {
         guard let app = NSWorkspace.shared.frontmostApplication,
               let bundleId = app.bundleIdentifier,
-              ideBundleIDs.contains(bundleId) else {
+              ideBundleIDs.contains(bundleId)
+        else {
             return nil
         }
 
@@ -297,9 +299,11 @@ final class AccessibilityContext {
         // Check if this is a tab or tab-like element
         // Note: Tab buttons don't have a constant in ApplicationServices, use string literal
         if role == kAXTabGroupRole as String || role == "AXTabButton" ||
-           role == "AXRadioButton" { // VSCode uses radio buttons for tabs
+            role == "AXRadioButton"
+        { // VSCode uses radio buttons for tabs
             if let title = getStringAttribute(element, kAXTitleAttribute as CFString),
-               isValidFileName(title) {
+               isValidFileName(title)
+            {
                 names.append(title)
             }
         }
@@ -310,7 +314,8 @@ final class AccessibilityContext {
                 // Window titles often have format "filename — Project" or "filename - VSCode"
                 let parts = title.split(separator: "—").first ?? title.split(separator: " - ").first
                 if let name = parts.map({ String($0).trimmingCharacters(in: .whitespaces) }),
-                   isValidFileName(name) {
+                   isValidFileName(name)
+                {
                     names.append(name)
                 }
             }
@@ -389,7 +394,7 @@ final class AccessibilityContext {
             "c", "cpp", "h", "hpp", "m", "mm", "rb", "php", "cs", "fs",
             "json", "yaml", "yml", "toml", "xml", "html", "css", "scss", "less",
             "md", "txt", "sh", "bash", "zsh", "fish", "ps1",
-            "sql", "graphql", "proto", "ex", "exs", "erl", "hs", "ml", "clj"
+            "sql", "graphql", "proto", "ex", "exs", "erl", "hs", "ml", "clj",
         ]
 
         let ext = name.split(separator: ".").last.map(String.init)?.lowercased() ?? ""
@@ -406,27 +411,27 @@ final class AccessibilityContext {
         // Patterns for common languages
         let patterns = [
             // Functions
-            "func\\s+(\\w+)",               // Swift
-            "fn\\s+(\\w+)",                 // Rust
-            "function\\s+(\\w+)",           // JS/TS
-            "def\\s+(\\w+)",                // Python/Ruby
-            "async\\s+def\\s+(\\w+)",       // Python async
-            "pub\\s+fn\\s+(\\w+)",          // Rust public
-            "private\\s+func\\s+(\\w+)",    // Swift private
+            "func\\s+(\\w+)", // Swift
+            "fn\\s+(\\w+)", // Rust
+            "function\\s+(\\w+)", // JS/TS
+            "def\\s+(\\w+)", // Python/Ruby
+            "async\\s+def\\s+(\\w+)", // Python async
+            "pub\\s+fn\\s+(\\w+)", // Rust public
+            "private\\s+func\\s+(\\w+)", // Swift private
 
             // Classes/Types
-            "class\\s+(\\w+)",              // Most languages
-            "struct\\s+(\\w+)",             // Swift/Rust/Go/C
-            "enum\\s+(\\w+)",               // Most languages
-            "interface\\s+(\\w+)",          // TS/Java/Go
-            "type\\s+(\\w+)",               // TS/Go
-            "trait\\s+(\\w+)",              // Rust
-            "protocol\\s+(\\w+)",           // Swift
+            "class\\s+(\\w+)", // Most languages
+            "struct\\s+(\\w+)", // Swift/Rust/Go/C
+            "enum\\s+(\\w+)", // Most languages
+            "interface\\s+(\\w+)", // TS/Java/Go
+            "type\\s+(\\w+)", // TS/Go
+            "trait\\s+(\\w+)", // Rust
+            "protocol\\s+(\\w+)", // Swift
 
             // Variables (be conservative to avoid noise)
-            "const\\s+(\\w+)\\s*=",         // JS/TS
-            "let\\s+(\\w+)\\s*[=:]",        // Swift/JS
-            "var\\s+(\\w+)\\s*[=:]"         // Swift/JS/Go
+            "const\\s+(\\w+)\\s*=", // JS/TS
+            "let\\s+(\\w+)\\s*[=:]", // Swift/JS
+            "var\\s+(\\w+)\\s*[=:]", // Swift/JS/Go
         ]
 
         for pattern in patterns {
@@ -435,7 +440,8 @@ final class AccessibilityContext {
                 let matches = regex.matches(in: codeToProcess, range: range)
                 for match in matches {
                     if match.numberOfRanges > 1,
-                       let range = Range(match.range(at: 1), in: codeToProcess) {
+                       let range = Range(match.range(at: 1), in: codeToProcess)
+                    {
                         let symbol = String(codeToProcess[range])
                         // Filter out common keywords and short names
                         if symbol.count >= 3 && !isCommonKeyword(symbol) {
@@ -456,7 +462,7 @@ final class AccessibilityContext {
             "let", "var", "const", "func", "function", "def", "class", "struct",
             "enum", "interface", "type", "return", "if", "else", "for", "while",
             "switch", "case", "break", "continue", "try", "catch", "throw",
-            "async", "await", "import", "export", "from", "package", "module"
+            "async", "await", "import", "export", "from", "package", "module",
         ]
         return keywords.contains(word.lowercased())
     }

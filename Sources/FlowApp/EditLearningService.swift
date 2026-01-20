@@ -69,7 +69,7 @@ final class EditLearningService {
         "new document",
         "new tab",
         "loading",
-        "about:blank"
+        "about:blank",
     ]
 
     /// Worker URL for proper noun extraction
@@ -99,17 +99,17 @@ final class EditLearningService {
         }
 
         self.originalText = originalText
-        self.targetAppPID = targetApp?.processIdentifier
-        self.monitoringStartTime = Date()
-        self.lastReadText = nil
-        self.lastChangeTime = Date()
+        targetAppPID = targetApp?.processIdentifier
+        monitoringStartTime = Date()
+        lastReadText = nil
+        lastChangeTime = Date()
 
         log("Starting edit monitoring for \(originalText.count) chars in \(targetApp?.localizedName ?? "Unknown")")
 
         // Try AX-based monitoring first (preferred)
         if let pid = targetAppPID,
-           let element = AXEditMonitorService.getFocusedTextElement(pid: pid) {
-
+           let element = AXEditMonitorService.getFocusedTextElement(pid: pid)
+        {
             axMonitor.onEditDetected = { [weak self] original, edited in
                 self?.processEdit(original: original, edited: edited)
             }
@@ -149,7 +149,8 @@ final class EditLearningService {
     private func pollTextElement() {
         guard let original = originalText,
               let pid = targetAppPID,
-              let startTime = monitoringStartTime else {
+              let startTime = monitoringStartTime
+        else {
             cancelMonitoring()
             return
         }
@@ -231,10 +232,11 @@ final class EditLearningService {
         // Get alignment result from Rust
         guard let alignmentJSON = engine.alignAndExtractCorrections(original: original, edited: edited),
               let alignmentData = alignmentJSON.data(using: .utf8),
-              let alignment = try? JSONDecoder().decode(AlignmentResult.self, from: alignmentData) else {
+              let alignment = try? JSONDecoder().decode(AlignmentResult.self, from: alignmentData)
+        else {
             log("Failed to get alignment from Rust")
             // Fall back to legacy learning
-            let _ = engine.learnFromEdit(original: original, edited: edited)
+            _ = engine.learnFromEdit(original: original, edited: edited)
             return
         }
 
@@ -321,7 +323,8 @@ final class EditLearningService {
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
+                  httpResponse.statusCode == 200
+            else {
                 log("Proper noun API returned non-200")
                 return []
             }
@@ -457,7 +460,8 @@ final class EditLearningService {
             if childRole == "AXTextArea" || childRole == "AXTextField" {
                 var valueRef: CFTypeRef?
                 if AXUIElementCopyAttributeValue(child, kAXValueAttribute as CFString, &valueRef) == .success,
-                   let text = valueRef as? String, !text.isEmpty {
+                   let text = valueRef as? String, !text.isEmpty
+                {
                     return text
                 }
             }
@@ -465,7 +469,8 @@ final class EditLearningService {
             // Check grandchildren
             var grandchildrenRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(child, kAXChildrenAttribute as CFString, &grandchildrenRef) == .success,
-               let grandchildren = grandchildrenRef as? [AXUIElement] {
+               let grandchildren = grandchildrenRef as? [AXUIElement]
+            {
                 for grandchild in grandchildren.prefix(10) {
                     var gcRoleRef: CFTypeRef?
                     AXUIElementCopyAttributeValue(grandchild, kAXRoleAttribute as CFString, &gcRoleRef)
@@ -474,7 +479,8 @@ final class EditLearningService {
                     if gcRole == "AXTextArea" || gcRole == "AXTextField" {
                         var valueRef: CFTypeRef?
                         if AXUIElementCopyAttributeValue(grandchild, kAXValueAttribute as CFString, &valueRef) == .success,
-                           let text = valueRef as? String, !text.isEmpty {
+                           let text = valueRef as? String, !text.isEmpty
+                        {
                             return text
                         }
                     }
@@ -487,8 +493,8 @@ final class EditLearningService {
 
     private func log(_ message: String) {
         #if DEBUG
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        print("[\(timestamp)] [EditLearning] \(message)")
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            print("[\(timestamp)] [EditLearning] \(message)")
         #endif
     }
 }

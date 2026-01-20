@@ -88,11 +88,11 @@ final class AppState: ObservableObject {
     private static let onboardingKey = "onboardingComplete"
 
     init() {
-        self.engine = Flow()
-        self.isConfigured = engine.isConfigured
-        self.hotkey = Hotkey.load()
-        self.isOnboardingComplete = UserDefaults.standard.bool(forKey: Self.onboardingKey)
-        self.isAccessibilityEnabled = GlobeKeyHandler.isAccessibilityAuthorized()
+        engine = Flow()
+        isConfigured = engine.isConfigured
+        hotkey = Hotkey.load()
+        isOnboardingComplete = UserDefaults.standard.bool(forKey: Self.onboardingKey)
+        isAccessibilityEnabled = GlobeKeyHandler.isAccessibilityAuthorized()
 
         if !isAccessibilityEnabled {
             log("⚠️ [INIT] Accessibility NOT enabled - hotkey will not work globally!")
@@ -202,16 +202,16 @@ final class AppState: ObservableObject {
         globeKeyHandler?.updateHotkey(hotkey)
 
         var properties: [String: Any] = [
-            "display_name": hotkey.displayName
+            "display_name": hotkey.displayName,
         ]
 
         switch hotkey.kind {
         case .globe:
             properties["type"] = "globe"
-        case .modifierOnly(let modifier):
+        case let .modifierOnly(modifier):
             properties["type"] = "modifierOnly"
             properties["modifier"] = modifier.rawValue
-        case .custom(let keyCode, let modifiers, let keyLabel):
+        case let .custom(keyCode, modifiers, keyLabel):
             properties["type"] = "custom"
             properties["key_code"] = keyCode
             properties["key_label"] = keyLabel
@@ -236,9 +236,9 @@ final class AppState: ObservableObject {
         let enabled = GlobeKeyHandler.isAccessibilityAuthorized()
         isAccessibilityEnabled = enabled
 
-        if !wasEnabled && enabled {
+        if !wasEnabled, enabled {
             Analytics.shared.track("Accessibility Permission Granted")
-        } else if wasEnabled && !enabled {
+        } else if wasEnabled, !enabled {
             Analytics.shared.track("Accessibility Permission Revoked")
         }
 
@@ -324,7 +324,7 @@ final class AppState: ObservableObject {
             (.option, .option),
             (.shift, .shift),
             (.control, .control),
-            (.command, .command)
+            (.command, .command),
         ]
 
         // Count how many modifiers are currently pressed
@@ -496,7 +496,7 @@ final class AppState: ObservableObject {
                 Analytics.shared.track("Recording Started", eventProperties: [
                     "app_name": self.currentApp,
                     "app_category": self.currentCategory.rawValue,
-                    "writing_mode": self.currentMode.rawValue
+                    "writing_mode": self.currentMode.rawValue,
                 ])
 
                 self.recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
@@ -506,7 +506,7 @@ final class AppState: ObservableObject {
                     }
                 }
 
-                self.audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 1/30, repeats: true) { [weak self] _ in
+                self.audioLevelTimer = Timer.scheduledTimer(withTimeInterval: 1 / 30, repeats: true) { [weak self] _ in
                     Task { @MainActor [weak self] in
                         guard let self, self.isRecording else { return }
                         let newLevel = self.engine.audioLevel
@@ -545,12 +545,11 @@ final class AppState: ObservableObject {
         // Restore volume immediately (was muted to prevent feedback)
         volumeManager.restoreAfterRecording()
 
-
         if duration > 0 {
             log("✅ [RECORDING] Recording stopped successfully - Duration: \(duration)ms")
             Analytics.shared.track("Recording Stopped", eventProperties: [
                 "duration_ms": recordingDuration,
-                "app_name": currentApp
+                "app_name": currentApp,
             ])
             setProcessing(true)
             transcribe()
@@ -558,7 +557,7 @@ final class AppState: ObservableObject {
             log("⚠️ [RECORDING] Recording cancelled (too short)")
             Analytics.shared.track("Recording Cancelled", eventProperties: [
                 "duration_ms": recordingDuration,
-                "app_name": currentApp
+                "app_name": currentApp,
             ])
             updateRecordingIndicatorVisibility()
         }
@@ -594,7 +593,7 @@ final class AppState: ObservableObject {
                         "app_category": appCategory.rawValue,
                         "writing_mode": mode.rawValue,
                         "duration_ms": duration,
-                        "text_length": text.count
+                        "text_length": text.count,
                     ])
 
                     self.activateTargetAppIfNeeded()
@@ -614,7 +613,7 @@ final class AppState: ObservableObject {
                     Analytics.shared.track("Transcription Failed", eventProperties: [
                         "app_name": appName,
                         "error": errorMsg,
-                        "duration_ms": duration
+                        "duration_ms": duration,
                     ])
 
                     self.refreshHistory()
@@ -629,7 +628,7 @@ final class AppState: ObservableObject {
         let appName = currentApp
 
         Analytics.shared.track("Transcription Retry Attempted", eventProperties: [
-            "app_name": appName
+            "app_name": appName,
         ])
 
         Task.detached { [weak self] in
@@ -648,7 +647,7 @@ final class AppState: ObservableObject {
 
                     Analytics.shared.track("Transcription Retry Succeeded", eventProperties: [
                         "app_name": appName,
-                        "text_length": text.count
+                        "text_length": text.count,
                     ])
 
                     self.activateTargetAppIfNeeded()
@@ -665,7 +664,7 @@ final class AppState: ObservableObject {
 
                     Analytics.shared.track("Transcription Retry Failed", eventProperties: [
                         "app_name": appName,
-                        "error": errorMsg
+                        "error": errorMsg,
                     ])
 
                     self.refreshHistory()
@@ -690,7 +689,7 @@ final class AppState: ObservableObject {
 
         Analytics.shared.track("Text Pasted", eventProperties: [
             "target_app": targetApplication?.localizedName ?? "Unknown",
-            "text_length": NSPasteboard.general.string(forType: .string)?.count ?? 0
+            "text_length": NSPasteboard.general.string(forType: .string)?.count ?? 0,
         ])
 
         // Start monitoring for edits to learn from user corrections
@@ -780,7 +779,7 @@ final class AppState: ObservableObject {
             Analytics.shared.track("Writing Mode Changed", eventProperties: [
                 "mode": mode.rawValue,
                 "app_name": targetAppName,
-                "app_category": targetAppCategory.rawValue
+                "app_category": targetAppCategory.rawValue,
             ])
         }
     }
@@ -792,7 +791,7 @@ final class AppState: ObservableObject {
         if result {
             Analytics.shared.track("Shortcut Added", eventProperties: [
                 "trigger_length": trigger.count,
-                "replacement_length": replacement.count
+                "replacement_length": replacement.count,
             ])
         }
         return result
@@ -825,5 +824,4 @@ final class AppState: ObservableObject {
     var totalWordsDictated: Int {
         (engine.stats?["total_words_dictated"] as? Int) ?? 0
     }
-
 }

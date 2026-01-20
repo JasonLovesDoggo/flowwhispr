@@ -96,11 +96,11 @@ public enum CloudTranscriptionProvider: UInt8, Sendable, CaseIterable {
 
 /// Whisper model sizes for local transcription
 public enum WhisperModel: UInt8, Sendable {
-    case turbo = 0     // Quantized tiny (~15MB) - blazing fast
-    case fast = 1      // Tiny (~39MB)
-    case balanced = 2  // Base (~142MB)
-    case quality = 3   // Distil-medium (~400MB) - recommended
-    case best = 4      // Distil-large-v3 (~750MB)
+    case turbo = 0 // Quantized tiny (~15MB) - blazing fast
+    case fast = 1 // Tiny (~39MB)
+    case balanced = 2 // Base (~142MB)
+    case quality = 3 // Distil-medium (~400MB) - recommended
+    case best = 4 // Distil-large-v3 (~750MB)
 
     public var displayName: String {
         switch self {
@@ -121,7 +121,6 @@ public enum WhisperModel: UInt8, Sendable {
         case .best: return "~750MB, highest accuracy"
         }
     }
-
 }
 
 /// Transcription mode: local or remote
@@ -131,7 +130,7 @@ public enum TranscriptionMode: Sendable {
 
     public var displayName: String {
         switch self {
-        case .local(let model): return "Local (\(model.displayName))"
+        case let .local(model): return "Local (\(model.displayName))"
         case .remote: return "Cloud API"
         }
     }
@@ -440,7 +439,8 @@ public final class Flow: @unchecked Sendable {
         }
 
         guard let jsonData = try? JSONSerialization.data(withJSONObject: jsonArray),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
+              let jsonString = String(data: jsonData, encoding: .utf8)
+        else {
             return nil
         }
 
@@ -573,7 +573,8 @@ public final class Flow: @unchecked Sendable {
         flow_free_string(cString)
 
         guard let data = jsonString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
             return nil
         }
         return json
@@ -630,7 +631,8 @@ public final class Flow: @unchecked Sendable {
         flow_free_string(cString)
 
         guard let data = jsonString.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else {
             return nil
         }
         return json
@@ -704,7 +706,7 @@ public final class Flow: @unchecked Sendable {
         guard let handle = handle else { return false }
 
         switch mode {
-        case .local(let model):
+        case let .local(model):
             return flow_set_transcription_mode(handle, true, model.rawValue)
         case .remote:
             return flow_set_transcription_mode(handle, false, 0) // model doesn't matter for remote
@@ -724,7 +726,7 @@ public final class Flow: @unchecked Sendable {
     public func getTranscriptionMode() -> TranscriptionMode? {
         guard let handle = handle else { return nil }
 
-        var useLocal: Bool = false
+        var useLocal = false
         var whisperModel: UInt8 = 3 // default to quality
 
         guard flow_get_transcription_mode(handle, &useLocal, &whisperModel) else {
@@ -794,7 +796,8 @@ public final class Flow: @unchecked Sendable {
         flow_free_string(cString)
 
         guard let data = jsonString.data(using: .utf8),
-              let words = try? JSONDecoder().decode([String].self, from: data) else {
+              let words = try? JSONDecoder().decode([String].self, from: data)
+        else {
             return []
         }
         return words
@@ -839,7 +842,8 @@ public final class Flow: @unchecked Sendable {
         guard let handle = handle else { return -1 }
 
         guard let jsonData = try? JSONEncoder().encode(words),
-              let jsonString = String(data: jsonData, encoding: .utf8) else {
+              let jsonString = String(data: jsonData, encoding: .utf8)
+        else {
             return -1
         }
 
@@ -866,7 +870,8 @@ public final class Flow: @unchecked Sendable {
         flow_free_string(cString)
 
         guard let data = jsonString.data(using: .utf8),
-              let words = try? JSONDecoder().decode([String].self, from: data) else {
+              let words = try? JSONDecoder().decode([String].self, from: data)
+        else {
             return nil
         }
         return words

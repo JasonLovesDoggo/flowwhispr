@@ -22,7 +22,7 @@ struct WaveformView: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1/107)) { _ in
+        TimelineView(.animation(minimumInterval: 1 / 107)) { _ in
             Canvas { context, size in
                 let barWidth: CGFloat = 1.5
                 let gap: CGFloat = 2.5
@@ -73,7 +73,7 @@ struct WaveformView: View {
                 let normalizationFactor = max(0.3, windowMax) // Use at least 0.3 as baseline
                 let bufferFilling = sampleBuffer.count < barCount
 
-                for i in 0..<barCount {
+                for i in 0 ..< barCount {
                     let x = startX + CGFloat(i) * (barWidth + gap)
 
                     // Get sample for this bar and apply log scale normalization

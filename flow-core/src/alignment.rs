@@ -1,4 +1,3 @@
-
 use serde::{Deserialize, Serialize};
 
 /// Word edit labels
