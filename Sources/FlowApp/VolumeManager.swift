@@ -4,7 +4,6 @@
 //
 // Manages system volume during recording to prevent audio feedback/echo.
 // Mutes system audio when recording starts, restores when recording stops.
-// Based on Wispr Flow's VolumeManager pattern.
 //
 
 import AudioToolbox

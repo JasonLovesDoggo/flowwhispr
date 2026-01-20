@@ -1,11 +1,7 @@
-//! Wispr-style word alignment using Needleman-Wunsch with custom scoring
-//!
-//! This module implements the exact alignment algorithm used by Wispr Flow
-//! to detect user edits and extract correction candidates.
 
 use serde::{Deserialize, Serialize};
 
-/// Word edit labels (matches Wispr's edit vector encoding)
+/// Word edit labels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WordLabel {
     /// M - exact match (words are identical)
@@ -175,7 +171,7 @@ fn normalized_edit_distance(a: &str, b: &str) -> f64 {
 
 /// Build the linear score matrix (Needleman-Wunsch with word-level edit distance)
 ///
-/// Wispr uses substitution_cost = 4 * normalized_edit_distance
+/// Flow uses substitution_cost = 4 * normalized_edit_distance
 /// This makes substitution more expensive than ins/del for dissimilar words.
 pub fn linear_score_matrix(
     original: &str,
@@ -290,7 +286,7 @@ pub fn backtrack_alignment(
                 compute_word_label(Some(orig_words[i - 1]), Some(edit_words[j - 1]));
             let punct_label = compute_punct_label(Some(orig_words[i - 1]), Some(edit_words[j - 1]));
 
-            // Wispr edge case: single-char substitution at boundaries might be capture error
+            // edge case: single-char substitution at boundaries might be capture error
             if (i == m || i == 1)
                 && word_label == WordLabel::Substitution
                 && edit_words[j - 1].len() == 1
@@ -340,7 +336,7 @@ fn is_context_char(c: char) -> bool {
 
 /// Find isolated single substitutions (user corrected one word)
 ///
-/// Matches Wispr's exact pattern: /(?=([CMZ]S[CMZ]|^S[CMZ]|[CMZ]S$))/g
+/// Exact pattern: /(?=([CMZ]S[CMZ]|^S[CMZ]|[CMZ]S$))/g
 /// - [CMZ]S[CMZ] - substitution surrounded by context chars
 /// - ^S[CMZ] - substitution at start, requires context char after
 /// - [CMZ]S$ - substitution at end, requires context char before
@@ -449,9 +445,8 @@ pub fn extract_corrections(steps: &[AlignmentStep]) -> Vec<(String, String)> {
     corrections
 }
 
-/// Main entry point: Parse alignment steps (matches Wispr's parseAlignmentSteps)
+/// Main entry point: Parse alignment steps
 pub fn parse_alignment_steps(original: &str, edited: &str) -> AlignmentResult {
-    // Wispr uses substitution cost multiplier of 4
     let matrix = linear_score_matrix(original, edited, 4.0);
     let steps = backtrack_alignment(&matrix, original, edited);
     let word_vec = edit_vector(&steps);
@@ -576,7 +571,7 @@ mod tests {
 
     #[test]
     fn test_proper_noun_correction() {
-        // Classic Wispr use case: misspelled proper noun
+        // Classic use case: misspelled proper noun
         let result =
             parse_alignment_steps("I talked to john yesterday", "I talked to John yesterday");
 

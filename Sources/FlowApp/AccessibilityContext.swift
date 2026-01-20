@@ -4,7 +4,6 @@
 //
 // Extracts context from the currently focused text field via macOS Accessibility APIs.
 // Provides surrounding text context to improve transcription accuracy.
-// Based on Wispr Flow's FocusChangeDetector + AX API pattern.
 //
 // Requires "Accessibility" permission in System Settings > Privacy & Security.
 //
