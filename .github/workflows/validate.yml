@@ -49,6 +49,11 @@ jobs:
             exit 1
           fi
 
+      - name: Build FlowHelper
+        run: |
+          cd FlowHelper
+          swift build
+
       - name: Build Swift package
         run: |
           swift build
