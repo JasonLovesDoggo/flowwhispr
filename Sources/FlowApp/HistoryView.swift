@@ -46,7 +46,7 @@ struct HistoryListView: View {
         .onAppear {
             appState.refreshHistory()
             Analytics.shared.track("History Viewed", eventProperties: [
-                "history_count": appState.history.count
+                "history_count": appState.history.count,
             ])
         }
     }
@@ -201,7 +201,7 @@ private struct HistoryRowView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(item.text, forType: .string)
         Analytics.shared.track("History Item Copied", eventProperties: [
-            "text_length": item.text.count
+            "text_length": item.text.count,
         ])
 
         withAnimation {

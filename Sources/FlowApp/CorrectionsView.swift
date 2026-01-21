@@ -21,7 +21,7 @@ struct CorrectionsContentView: View {
             ? corrections
             : corrections.filter {
                 $0.original.localizedCaseInsensitiveContains(searchText) ||
-                $0.corrected.localizedCaseInsensitiveContains(searchText)
+                    $0.corrected.localizedCaseInsensitiveContains(searchText)
             }
 
         switch sortOrder {
@@ -276,7 +276,7 @@ struct CorrectionsContentView: View {
     private func confidenceBadge(_ confidence: Double) -> some View {
         let percentage = Int(confidence * 100)
         let color: Color = confidence >= 0.8 ? FW.success :
-                           confidence >= 0.55 ? FW.warning : FW.textMuted
+            confidence >= 0.55 ? FW.warning : FW.textMuted
 
         return Text("\(percentage)%")
             .font(FW.fontMonoSmall)
@@ -302,7 +302,7 @@ struct CorrectionsContentView: View {
     }
 
     private func clearAllCorrections() {
-        let _ = appState.engine.deleteAllCorrections()
+        _ = appState.engine.deleteAllCorrections()
         withAnimation(.easeOut(duration: 0.2)) {
             corrections = []
         }
